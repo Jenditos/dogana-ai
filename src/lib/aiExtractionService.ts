@@ -130,7 +130,7 @@ Rules:
     body: JSON.stringify({
       model: 'gpt-4o-mini', // vision-capable; gpt-5-mini is text-only
       messages,
-      max_tokens: 4096,
+      max_completion_tokens: 4096,
     }),
   })
 
@@ -221,7 +221,7 @@ ${trimmed}`
     body: JSON.stringify({
       model: 'gpt-5-mini',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 4096,
+      max_completion_tokens: 4096,
     }),
   })
 
@@ -285,7 +285,7 @@ Format: {"header": {...}, "items": []}`
     body: JSON.stringify({
       model: 'gpt-5-mini',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1024,
+      max_completion_tokens: 1024,
     }),
   })
 
