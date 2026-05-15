@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<ASYCUDA id="{{ASYCUDA_ID}}">
+<Assessment_notice>
+{{ASSESSMENT_ITEM_TAX_TOTALS}}
+<Global_taxes>
+{{GLOBAL_TAX_ITEMS}}
+</Global_taxes>
+</Assessment_notice>
+<Property>
+<Sad_flow>I</Sad_flow>
+<Forms>
+<Number_of_the_form>1</Number_of_the_form>
+<Total_number_of_forms>{{TOTAL_FORMS}}</Total_number_of_forms>
+</Forms>
+<Nbers>
+<Number_of_loading_lists />
+<Total_number_of_items>{{TOTAL_ITEMS}}</Total_number_of_items>
+</Nbers>
+<Place_of_declaration>
+<null />
+</Place_of_declaration>
+<Date_of_declaration />
+<Selected_page />
+</Property>
+<Identification>
+<Office_segment>
+<Customs_clearance_office_code>2048</Customs_clearance_office_code>
+<Customs_Clearance_office_name>DURRËS KONTIENER</Customs_Clearance_office_name>
+</Office_segment>
+<Type>
+<Type_of_declaration>IM</Type_of_declaration>
+<Declaration_gen_procedure_code>4</Declaration_gen_procedure_code>
+<Type_of_transit_document>
+<null />
+</Type_of_transit_document>
+</Type>
+<Manifest_reference_number>
+<null />
+</Manifest_reference_number>
+<Registration>
+<Serial_number>R</Serial_number>
+<Number />
+<Date />
+</Registration>
+<Assessment>
+<Serial_number>L</Serial_number>
+<Number />
+<Date />
+</Assessment>
+<receipt>
+<Serial_number>P</Serial_number>
+<Number />
+<Date />
+</receipt>
+</Identification>
+<Traders>
+<Exporter>
+<Exporter_code>
+<null />
+</Exporter_code>
+<Exporter_name>{{EXPORTER_NAME}}</Exporter_name>
+</Exporter>
+<Consignee>
+<Consignee_code>{{CONSIGNEE_CODE}}</Consignee_code>
+<Consignee_name>{{CONSIGNEE_NAME}}</Consignee_name>
+</Consignee>
+<Financial>
+<Financial_code>{{FINANCIAL_CODE}}</Financial_code>
+<Financial_name>{{FINANCIAL_NAME}}</Financial_name>
+</Financial>
+<Private>
+<Person>
+<Private_name>
+<null />
+</Private_name>
+<Private_name_ID>
+<null />
+</Private_name_ID>
+</Person>
+</Private>
+<Declarant>
+<Declarant_code>{{DECLARANT_CODE}}</Declarant_code>
+<Declarant_name>{{DECLARANT_NAME}}</Declarant_name>
+</Declarant>
+</Traders>
+<General_information>
+<Country>
+<Country_first_destination>AL</Country_first_destination>
+<Trading_country>XK</Trading_country>
+<Export>
+<Export_country_code>{{EXPORT_COUNTRY_CODE}}</Export_country_code>
+<Export_country_name>{{EXPORT_COUNTRY_NAME}}</Export_country_name>
+<Export_country_region>
+<null />
+</Export_country_region>
+</Export>
+<Destination>
+<Destination_country_code>{{DESTINATION_COUNTRY_CODE}}</Destination_country_code>
+<Destination_country_name>{{DESTINATION_COUNTRY_NAME}}</Destination_country_name>
+<Destination_country_region>
+<null />
+</Destination_country_region>
+</Destination>
+<Country_of_origin_name>{{COUNTRY_OF_ORIGIN_NAME}}</Country_of_origin_name>
+</Country>
+<Value_details>0</Value_details>
+<CAP>0</CAP>
+<Additional_information>
+<null />
+</Additional_information>
+<Comments_free_text>{{COMMENTS_FREE_TEXT}}</Comments_free_text>
+</General_information>
+<Transport>
+<Means_of_transport>
+<Departure_arrival_information>
+<Identity>{{TRANSPORT_IDENTITY}}</Identity>
+<Identitya />
+<Nationality />
+</Departure_arrival_information>
+<Border_information>
+<Identity>{{TRANSPORT_BORDER_IDENTITY}}</Identity>
+<Identitya />
+<Nationality />
+</Border_information>
+<Inland_mode_of_transport>
+<Code>{{INLAND_TRANSPORT_CODE}}</Code>
+<Name>
+<null />
+</Name>
+</Inland_mode_of_transport>
+</Means_of_transport>
+<Delivery_terms>
+<Code>{{INCOTERM_CODE}}</Code>
+<Place>{{INCOTERM_PLACE}}</Place>
+</Delivery_terms>
+<Place_of_loading>
+<Code>
+<null />
+</Code>
+<Name>
+<null />
+</Name>
+<Country>
+<null />
+</Country>
+</Place_of_loading>
+<Location_of_goods>
+<null />
+</Location_of_goods>
+</Transport>
+{{ITEMS}}
+</ASYCUDA>

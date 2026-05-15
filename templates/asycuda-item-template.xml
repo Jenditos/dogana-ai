@@ -1,0 +1,236 @@
+<Item>
+<Packages>
+<Number_of_packages>{{ITEM_PACKAGES}}</Number_of_packages>
+<Marks1_of_packages>
+<null />
+</Marks1_of_packages>
+<Marks2_of_packages>
+<null />
+</Marks2_of_packages>
+<Kind_of_packages_code>PC</Kind_of_packages_code>
+</Packages>
+<IncoTerms>
+<Code>{{ITEM_INCOTERM_CODE}}</Code>
+<Place>{{ITEM_INCOTERM_PLACE}}</Place>
+</IncoTerms>
+<Tarification>
+<Tarification_data>
+<null />
+</Tarification_data>
+<HScode>
+<Commodity_code>{{ITEM_COMMODITY_CODE}}</Commodity_code>
+<Precision_1>00</Precision_1>
+<Precision_2>
+<null />
+</Precision_2>
+<Precision_3>
+<null />
+</Precision_3>
+<Precision_4>
+<null />
+</Precision_4>
+</HScode>
+<Preference_code>100</Preference_code>
+<Extended_customs_procedure>4000</Extended_customs_procedure>
+<National_customs_procedure>000</National_customs_procedure>
+<Quota_code>
+<null />
+</Quota_code>
+<Quota>
+<QuotaCode>
+<null />
+</QuotaCode>
+<QuotaId />
+<QuotaItem>
+<ItmNbr />
+</QuotaItem>
+</Quota>
+<Supplementary_unit>
+<Suppplementary_unit_code>{{ITEM_SUPP_UNIT_CODE}}</Suppplementary_unit_code>
+<Suppplementary_unit_name>{{ITEM_SUPP_UNIT_NAME}}</Suppplementary_unit_name>
+<Suppplementary_unit_quantity>{{ITEM_SUPP_UNIT_QTY}}</Suppplementary_unit_quantity>
+</Supplementary_unit>
+<Item_price>{{ITEM_PRICE}}</Item_price>
+<Valuation_method_code>1</Valuation_method_code>
+<Value_item>0.00+0.00+0.00+0.00-0.00</Value_item>
+<Attached_doc_item>380 {{ITEM_INVOICE_REF}}</Attached_doc_item>
+<A.I._code>
+<null />
+</A.I._code>
+</Tarification>
+<write_off_unit>
+<write_off_unit_code>
+<null />
+</write_off_unit_code>
+<write_off_unit_qty />
+</write_off_unit>
+<Goods_description>
+<Country_of_origin_code>{{ITEM_ORIGIN_CODE}}</Country_of_origin_code>
+<Country_of_origin_region>
+<null />
+</Country_of_origin_region>
+<Description_of_goods>{{ITEM_DESC_ALBANIAN}}</Description_of_goods>
+<Commercial_Description>{{ITEM_DESC_ENGLISH}}
+TOTAL: {{ITEM_QTY}} {{ITEM_UNIT}}
+FATURE {{ITEM_INVOICE_REF}} / KONTEJNER {{ITEM_CONTAINER}}</Commercial_Description>
+</Goods_description>
+<Previous_doc>
+<Summary_declaration>
+<null />
+</Summary_declaration>
+<Summary_declaration_sl>
+<null />
+</Summary_declaration_sl>
+<Previous_document_reference>
+<null />
+</Previous_document_reference>
+<Previous_warehouse_code>
+<null />
+</Previous_warehouse_code>
+</Previous_doc>
+<Licence_number>
+<null />
+</Licence_number>
+<Amount_deducted_from_licence />
+<Quantity_deducted_from_licence />
+<Free_text_1>380:{{ITEM_INVOICE_REF}} {{ITEM_INVOICE_DATE}}</Free_text_1>
+<Free_text_2>
+<null />
+</Free_text_2>
+<Taxation>
+<Item_taxes_amount>{{ITEM_TOTAL_TAX}}</Item_taxes_amount>
+<Item_taxes_guaranted_amount />
+<Item_taxes_mode_of_payment>1</Item_taxes_mode_of_payment>
+<Counter_of_normal_mode_of_payment />
+<Displayed_item_taxes_amount />
+<Taxation_line>
+<Duty_tax_code>CD</Duty_tax_code>
+<Duty_tax_Base>{{ITEM_CIF}}</Duty_tax_Base>
+<Duty_tax_rate>{{ITEM_CD_RATE}}</Duty_tax_rate>
+<Duty_tax_amount>{{ITEM_CD_AMOUNT}}</Duty_tax_amount>
+<Duty_tax_MP>1</Duty_tax_MP>
+<Duty_tax_Type_of_calculation>
+<null />
+</Duty_tax_Type_of_calculation>
+</Taxation_line>
+<Taxation_line>
+<Duty_tax_code>VT</Duty_tax_code>
+<Duty_tax_Base>{{ITEM_VT_BASE}}</Duty_tax_Base>
+<Duty_tax_rate>{{ITEM_VT_RATE}}</Duty_tax_rate>
+<Duty_tax_amount>{{ITEM_VT_AMOUNT}}</Duty_tax_amount>
+<Duty_tax_MP>1</Duty_tax_MP>
+<Duty_tax_Type_of_calculation>
+<null />
+</Duty_tax_Type_of_calculation>
+</Taxation_line>
+<Taxation_line>
+<Duty_tax_code>
+<null />
+</Duty_tax_code>
+<Duty_tax_Base />
+<Duty_tax_rate />
+<Duty_tax_amount />
+<Duty_tax_MP>
+<null />
+</Duty_tax_MP>
+<Duty_tax_Type_of_calculation>
+<null />
+</Duty_tax_Type_of_calculation>
+</Taxation_line>
+<Taxation_line>
+<Duty_tax_code>
+<null />
+</Duty_tax_code>
+<Duty_tax_Base />
+<Duty_tax_rate />
+<Duty_tax_amount />
+<Duty_tax_MP>
+<null />
+</Duty_tax_MP>
+<Duty_tax_Type_of_calculation>
+<null />
+</Duty_tax_Type_of_calculation>
+</Taxation_line>
+<Taxation_line>
+<Duty_tax_code>
+<null />
+</Duty_tax_code>
+<Duty_tax_Base />
+<Duty_tax_rate />
+<Duty_tax_amount />
+<Duty_tax_MP>
+<null />
+</Duty_tax_MP>
+<Duty_tax_Type_of_calculation>
+<null />
+</Duty_tax_Type_of_calculation>
+</Taxation_line>
+</Taxation>
+<Valuation_item>
+<Weight_itm>
+<Gross_weight_itm>{{ITEM_GROSS_WEIGHT}}</Gross_weight_itm>
+<Net_weight_itm>{{ITEM_NET_WEIGHT}}</Net_weight_itm>
+</Weight_itm>
+<Total_cost_itm>0</Total_cost_itm>
+<Total_CIF_itm>{{ITEM_CIF}}</Total_CIF_itm>
+<Rate_of_adjustement>1</Rate_of_adjustement>
+<Statistical_value>{{ITEM_STATISTICAL_VALUE}}</Statistical_value>
+<Alpha_coeficient_of_apportionment>{{ITEM_ALPHA_COEF}}</Alpha_coeficient_of_apportionment>
+<Item_Invoice>
+<Amount_national_currency>{{ITEM_CIF}}</Amount_national_currency>
+<Amount_foreign_currency>{{ITEM_CIF}}</Amount_foreign_currency>
+<Currency_code>{{CURRENCY}}</Currency_code>
+<Currency_name>
+<null />
+</Currency_name>
+<Currency_rate>1</Currency_rate>
+</Item_Invoice>
+<item_external_freight>
+<Amount_national_currency>0</Amount_national_currency>
+<Amount_foreign_currency>0.0</Amount_foreign_currency>
+<Currency_code>
+<null />
+</Currency_code>
+<Currency_name>Nuk ka valutë të huaj</Currency_name>
+<Currency_rate>0</Currency_rate>
+</item_external_freight>
+<item_insurance>
+<Amount_national_currency>0</Amount_national_currency>
+<Amount_foreign_currency>0.0</Amount_foreign_currency>
+<Currency_code>
+<null />
+</Currency_code>
+<Currency_name>Nuk ka valutë të huaj</Currency_name>
+<Currency_rate>0</Currency_rate>
+</item_insurance>
+<item_other_cost>
+<Amount_national_currency>0</Amount_national_currency>
+<Amount_foreign_currency>0.0</Amount_foreign_currency>
+<Currency_code>
+<null />
+</Currency_code>
+<Currency_name>Nuk ka valutë të huaj</Currency_name>
+<Currency_rate>0</Currency_rate>
+</item_other_cost>
+<item_deduction>
+<Amount_national_currency>0</Amount_national_currency>
+<Amount_foreign_currency>0.0</Amount_foreign_currency>
+<Currency_code>
+<null />
+</Currency_code>
+<Currency_name>Nuk ka valutë të huaj</Currency_name>
+<Currency_rate>0</Currency_rate>
+</item_deduction>
+<Market_valuer>
+<Rate />
+<Currency_code>
+<null />
+</Currency_code>
+<Currency_amount />
+<Basis_description>
+<null />
+</Basis_description>
+<Basis_amount />
+</Market_valuer>
+</Valuation_item>
+</Item>
