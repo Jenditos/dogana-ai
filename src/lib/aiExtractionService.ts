@@ -128,7 +128,7 @@ Rules:
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'gpt-4o',
+      model: 'gpt-5-mini',
       messages,
       max_tokens: 4096,
     }),
@@ -219,7 +219,7 @@ ${trimmed}`
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: 'gpt-4o',
+      model: 'gpt-5-mini',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 4096,
     }),
@@ -283,7 +283,7 @@ Format: {"header": {...}, "items": []}`
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: 'gpt-4o',
+      model: 'gpt-5-mini',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 1024,
     }),
