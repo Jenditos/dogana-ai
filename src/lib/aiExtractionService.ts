@@ -128,7 +128,7 @@ Rules:
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'gpt-5-mini',
+      model: 'gpt-4o-mini', // vision-capable; gpt-5-mini is text-only
       messages,
       max_tokens: 4096,
     }),
