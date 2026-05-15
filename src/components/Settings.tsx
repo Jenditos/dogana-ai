@@ -1,8 +1,11 @@
 'use client'
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import type { AppSettings, Language, TariffRule } from '@/types'
 import { t, setLanguage } from '@/lib/i18n'
 import { saveTariffRules } from '@/lib/tariffMapper'
+
+const TariffSearch = dynamic(() => import('./TariffSearch'), { ssr: false })
 
 interface Props {
   lang: Language
@@ -70,6 +73,11 @@ const IcoPlus = () => (
     <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
   </svg>
 )
+const IcoSearch = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>
+)
 const IcoTrash = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -103,6 +111,7 @@ const S = {
 export default function Settings({ lang, settings, tariffRules, onSettingsChange, onTariffRulesChange, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<'general' | 'tariffs' | 'dev'>('general')
   const [newRule, setNewRule] = useState<Partial<TariffRule>>({ customsRate: 10, vatRate: 18 })
+  const [showTarikSearch, setShowTarikSearch] = useState(false)
   const sq = lang === 'sq'
 
   const handleLangChange = (l: Language) => {
@@ -343,7 +352,27 @@ export default function Settings({ lang, settings, tariffRules, onSettingsChange
           {/* ════ TARIFFS ════ */}
           {activeTab === 'tariffs' && (
             <div>
-              <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--t3)' }}>
+              {/* TARIK full database search */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '14px 16px', background: 'var(--surface-2)',
+                border: '1px solid var(--border)', borderRadius: 14, marginBottom: 20,
+              }}>
+                <div>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: 13.5, color: 'var(--t1)' }}>
+                    {sq ? 'TARIK 2025 — Baza e plotë e tarifave' : 'TARIK 2025 — Full tariff database'}
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--t4)' }}>
+                    {sq ? '9,299 kode tariforë · Dogana e Kosovës' : '9,299 tariff codes · Kosovo Customs'}
+                  </p>
+                </div>
+                <button onClick={() => setShowTarikSearch(true)} className="btn btn-primary" style={{ height: 38, padding: '0 16px', gap: 7, fontSize: 13 }}>
+                  <IcoSearch />
+                  {sq ? 'Kërko kodin' : 'Search code'}
+                </button>
+              </div>
+
+              <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--t3)' }}>
                 {sq ? 'Shto rregulla të reja për kodimin automatik tarifor.' : 'Add new rules for automatic tariff code assignment.'}
               </p>
 
@@ -501,6 +530,14 @@ export default function Settings({ lang, settings, tariffRules, onSettingsChange
           </button>
         </div>
       </div>
+
+      {/* ── TARIK full search modal (rendered on top of Settings) ── */}
+      {showTarikSearch && (
+        <TariffSearch
+          lang={lang}
+          onClose={() => setShowTarikSearch(false)}
+        />
+      )}
     </div>
   )
 }
