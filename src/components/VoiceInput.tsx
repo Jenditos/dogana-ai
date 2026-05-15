@@ -1,7 +1,10 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import type { Language, HeaderData } from '@/types'
 import { t } from '@/lib/i18n'
+
+const MicDiagnostic = dynamic(() => import('./MicDiagnostic'), { ssr: false })
 
 /* ── Types ───────────────────────────────────────────────────── */
 type VoiceState = 'idle' | 'requesting' | 'listening' | 'processing' | 'done' | 'error'
@@ -73,12 +76,18 @@ const IcoRefresh = () => (
     <path d="M3.51 15a9 9 0 1 0 .49-4.5"/>
   </svg>
 )
+const IcoBeaker = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 3h6v10l3 5H6l3-5z"/><line x1="9" y1="3" x2="9" y2="13"/><line x1="15" y1="3" x2="15" y2="13"/>
+  </svg>
+)
 
 /* ═══════════════════════════════════════════════════════════════
    Main component
    ═══════════════════════════════════════════════════════════════ */
 export default function VoiceInput({ lang, onExtracted }: Props) {
   const [voiceState,       setVoiceState]       = useState<VoiceState>('idle')
+  const [showDiag,         setShowDiag]         = useState(false)
   const [devices,          setDevices]          = useState<AudioDevice[]>([])
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
   const [transcript,       setTranscript]       = useState('')
@@ -516,6 +525,29 @@ export default function VoiceInput({ lang, onExtracted }: Props) {
           )}
         </div>
       )}
+
+      {/* ── Mic diagnostic button ────────────────────────────────── */}
+      {!isBusy && (
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <button
+            onClick={() => setShowDiag(true)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 14px', borderRadius: 99,
+              border: '1px solid var(--border)', background: 'transparent',
+              color: 'var(--t4)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              transition: 'all .15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--t2)'; e.currentTarget.style.borderColor = 'var(--border-2)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--t4)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+          >
+            <IcoBeaker />
+            {sq ? 'Testo mikrofonin' : 'Test microphone'}
+          </button>
+        </div>
+      )}
+
+      {showDiag && <MicDiagnostic lang={lang} onClose={() => setShowDiag(false)} />}
 
       {/* ── Manual text fallback ──────────────────────────────────── */}
       {!isListening && !transcript && (
