@@ -259,12 +259,60 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
   review: 'badge badge-amber', ready: 'badge badge-green', draft: 'badge badge-gray',
 }
 
+/* ── Extraction Error Card — replaces alert() ────────────────── */
+function ExtractErrorCard({
+  lang, message, technical, onRetry,
+}: { lang: Language; message: string; technical?: string; onRetry: () => void }) {
+  const [showTech, setShowTech] = useState(false)
+  const sq = lang === 'sq'
+  return (
+    <div style={{
+      background: 'var(--red-bg)', border: '1px solid var(--red-bdr)',
+      borderRadius: 14, padding: '16px 18px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <p style={{ margin: 0, fontSize: 13.5, fontWeight: 600, color: 'var(--red)', lineHeight: 1.5 }}>
+          {message}
+        </p>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={onRetry} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '7px 14px', borderRadius: 9, border: '1px solid var(--red-bdr)',
+          background: '#fff', color: 'var(--red)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+        }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+          {sq ? 'Provo përsëri' : 'Try again'}
+        </button>
+        {technical && (
+          <button onClick={() => setShowTech(v => !v)} style={{
+            padding: '7px 14px', borderRadius: 9, border: '1px solid var(--red-bdr)',
+            background: 'transparent', color: 'var(--red)', fontSize: 12.5, cursor: 'pointer',
+          }}>
+            {showTech ? (sq ? 'Fshih detajet' : 'Hide details') : (sq ? 'Detaje teknike' : 'Technical details')}
+          </button>
+        )}
+      </div>
+      {showTech && technical && (
+        <pre style={{
+          marginTop: 10, padding: '10px 12px', borderRadius: 8,
+          background: 'rgba(220,38,38,.08)', color: 'var(--red)',
+          fontSize: 11, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+        }}>{technical}</pre>
+      )}
+    </div>
+  )
+}
+
 export default function Home() {
   const [lang, setLang]               = useState<Language>('sq')
   const [step, setStep]               = useState<Step>('upload')
   const [activeAction, setActiveAction] = useState<'upload' | 'voice' | 'camera' | null>('upload')
   const [showCamera, setShowCamera]   = useState(false)
   const [loading, setLoading]         = useState(false)
+  const [loadingStep, setLoadingStep] = useState('')   // progress label
+  const [extractError, setExtractError] = useState<{ msg: string; tech?: string } | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [settings, setSettings]       = useState<AppSettings>(DEFAULT_SETTINGS)
   const [tariffRules, setTariffRules] = useState<TariffRule[]>([])
@@ -304,20 +352,37 @@ export default function Home() {
 
   const handleFilesUpload = async (files: File[]) => {
     setLoading(true)
+    setExtractError(null)
+    setLoadingStep(sq ? 'Duke ngarkuar dokumentet...' : 'Uploading documents...')
     try {
       const fd = new FormData()
       files.forEach(f => fd.append('files', f))
+
+      setLoadingStep(sq ? 'Duke lexuar dokumentet...' : 'Reading documents...')
       const res  = await fetch('/api/extract', { method: 'POST', body: fd })
       const data = await res.json()
+
       if (!res.ok) throw new Error(data.error || 'Extraction failed')
+
+      setLoadingStep(sq ? 'Duke nxjerrë të dhënat...' : 'Extracting data...')
       setHeader(data.header || {})
       setItems(data.items || [])
       setPositions(data.positions || [])
       setMissingFields(data.missingFields || [])
       setStep('review')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Gabim gjatë leximit')
-    } finally { setLoading(false) }
+      const technical = err instanceof Error ? err.message : String(err)
+      console.error('[Upload] extraction failed:', technical)
+      setExtractError({
+        msg: lang === 'sq'
+          ? 'Dokumenti nuk mund të lexohej. Ju lutem provoni përsëri ose ngarkoni një format tjetër.'
+          : 'The document could not be read. Please try again or upload a different format.',
+        tech: technical,
+      })
+    } finally {
+      setLoading(false)
+      setLoadingStep('')
+    }
   }
 
   const handleVoiceExtracted = (data: Partial<HeaderData>) => {
@@ -450,7 +515,19 @@ export default function Home() {
             {/* Upload zone (conditional) */}
             {activeAction === 'upload' && (
               <div className="a-slide-down" style={{ marginBottom: 20 }}>
-                <UploadZone lang={lang} onFiles={handleFilesUpload} loading={loading} />
+                <UploadZone lang={lang} onFiles={handleFilesUpload} loading={loading} loadingStep={loadingStep} />
+              </div>
+            )}
+
+            {/* ── Extraction Error Card (replaces alert()) ─────── */}
+            {extractError && (
+              <div className="a-fade-in" style={{ marginBottom: 20 }}>
+                <ExtractErrorCard
+                  lang={lang}
+                  message={extractError.msg}
+                  technical={extractError.tech}
+                  onRetry={() => setExtractError(null)}
+                />
               </div>
             )}
 

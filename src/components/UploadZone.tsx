@@ -7,6 +7,7 @@ interface Props {
   lang: Language
   onFiles: (files: File[]) => void
   loading: boolean
+  loadingStep?: string
 }
 
 const UploadCloudIcon = () => (
@@ -37,7 +38,7 @@ const SpinnerIcon = () => (
   </svg>
 )
 
-export default function UploadZone({ lang, onFiles, loading }: Props) {
+export default function UploadZone({ lang, onFiles, loading, loadingStep }: Props) {
   const [files, setFiles] = useState<File[]>([])
   const sq = lang === 'sq'
 
@@ -170,7 +171,7 @@ export default function UploadZone({ lang, onFiles, loading }: Props) {
         style={{ width: '100%', height: 52, fontSize: 15, fontWeight: 700, borderRadius: 14, gap: 10 }}
       >
         {loading ? (
-          <><SpinnerIcon /> {sq ? 'Duke lexuar dokumentet...' : 'Reading documents...'}</>
+          <><SpinnerIcon /> {loadingStep || (sq ? 'Duke lexuar dokumentet...' : 'Reading documents...')}</>
         ) : (
           <>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

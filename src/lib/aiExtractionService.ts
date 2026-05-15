@@ -1,13 +1,14 @@
 import type { ExtractionResult, InvoiceItem, HeaderData } from '@/types'
 import { findTariffByKeyword, getTariffRules } from './tariffMapper'
 
-const ALBANIAN_TRANSLATIONS: Record<string, string> = {
+/* ── Albanian translation dictionary ────────────────────────── */
+const ALB: Record<string, string> = {
   'CAR AROMATHERAPY PAPER TABLET': 'TABLETA AROMATIKE PREJ LETRE PER AUTOMJETE',
   'CERAMIC BOWL': 'TAS QERAMIKE',
   'CERAMIC PLATE': 'PJATE QERAMIKE',
   'CERAMIC STOCKPOT': 'TENXHERE QERAMIKE',
-  'CERAMIC TABLEWARE SET': 'SET ENESH TRYEZE QERAMIKE',
-  'GLASS TABLEWARE SET': 'SET ENESH TRYEZE QELQI',
+  'CERAMIC TABLEWARE': 'ENE TRYEZE QERAMIKE',
+  'GLASS TABLEWARE': 'ENE TRYEZE QELQI',
   'GLASS CUP': 'GOTE QELQI',
   'CHARGER': 'MBUSHES ELEKTRIK',
   'USB CABLE': 'KABLLO USB',
@@ -20,7 +21,7 @@ const ALBANIAN_TRANSLATIONS: Record<string, string> = {
   'BABY STROLLER': 'KARROCA FEMIJESH',
   'MODEL METAL CAR': 'MAKINE LODRA METALIKE',
   'BALL TOY': 'TOP LODRA',
-  'SCOOTER': 'BIÇIKLETE FEMIJESH',
+  'SCOOTER': 'TROTINET',
   'PUMP': 'POMPE',
   'HAIR DRYER': 'THARSE FLOKESH',
   'DRY IRON': 'HEKUR I THATE',
@@ -34,179 +35,110 @@ const ALBANIAN_TRANSLATIONS: Record<string, string> = {
   'PAPER NAPKIN': 'PECETE LETRE',
   'TOILET PAPER': 'LETER TUALETI',
   'PAPER TOWEL': 'PESHQIR LETRE',
+  'VACUUM CLEANER': 'FSHESE ELEKTRIKE',
+  'ELECTRIC MIXER': 'MIKSER ELEKTRIK',
+  'HAIR STRAIGHTENER': 'DREJTUES FLOKESH',
+  'SHAMPOO': 'SHAMPO',
 }
 
 export function translateToAlbanian(descriptionEn: string): string {
   const upper = descriptionEn.toUpperCase()
-
-  for (const [key, val] of Object.entries(ALBANIAN_TRANSLATIONS)) {
-    if (upper.includes(key)) return val
+  // Sort by length desc so longer/more specific keywords match first
+  const sorted = Object.keys(ALB).sort((a, b) => b.length - a.length)
+  for (const key of sorted) {
+    if (upper.includes(key)) return ALB[key]
   }
-
-  // Attempt word-by-word
-  return descriptionEn.toUpperCase()
+  return upper
 }
 
-export async function extractWithAI(
-  base64Images: string[],
-  mimeType: string
-): Promise<ExtractionResult> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    throw new Error('OPENAI_API_KEY not configured')
-  }
+/* ── Shared extraction prompt ────────────────────────────────── */
+const EXTRACTION_PROMPT = `You are an expert customs document data extractor. Extract ALL data from this commercial invoice or packing list.
 
-  const prompt = `You are a customs document data extractor. Extract ALL data from this invoice/packing list document.
+FIELD MAPPING (extract these exact fields):
+- exporterName: Seller / Manufacturer / Shipper company name
+- exporterAddress: Full address of the seller
+- importerName: Buyer / Consignee company name
+- importerAddress: Full address of the buyer
+- importerNui: NUI, NIPT, VAT number, or Tax ID of the importer
+- invoiceNumber: Invoice number / reference number (e.g. "PFL2601")
+- invoiceDate: Invoice date in original format (e.g. "06.02.2026")
+- containerNumber: Container number (e.g. "CAIU7808456")
+- incoterm: Delivery terms (e.g. "FOB NINGBO", "CIF DURRES")
+- portOfLoading: Port of loading / departure port (e.g. "NINGBO")
+- portOfDischarge: Port of discharge / arrival port (e.g. "DURRES")
+- placeOfDelivery: Place of delivery (e.g. "KOSOVA")
+- countryOfOrigin: Country where goods are produced (e.g. "CN" or "CHINA")
+- countryOfExport: Country goods are exported from (e.g. "CN")
+- countryOfDestination: Destination country (e.g. "XK" or "KOSOVO")
+- currency: Currency code (e.g. "EUR", "USD")
+- totalInvoice: Total invoice amount as a number (e.g. 68869.16)
+- totalGrossWeight: Total gross weight in kg as a number (e.g. 11200)
+- totalPackages: Total number of packages/cartons as a number (e.g. 562)
+- totalVolume: Total volume in cubic meters as a number (e.g. 68.00)
+- transportMode: Mode of transport (e.g. "SEA", "ROAD", "AIR")
+- transportIdentity: Vehicle/vessel ID if present
+- cmrNumber: CMR number if present
+- vehiclePlate: Vehicle plate if present
 
-Return ONLY valid JSON in this exact format:
+For items, extract EVERY single line item from the table:
+- itemNo: Item mark / article number (e.g. "F2-1--5")
+- descriptionEn: Full product description in English
+- qty: Quantity as a number
+- unit: Unit of measurement (PCS, SET, CTN, KG, M, etc.)
+- unitPrice: Unit price as a number
+- totalValue: Total value as a number
+- packages: Number of cartons/packages as a number
+- grossWeight: Gross weight in kg as a number
+- netWeight: Net weight in kg as a number (0 if not present)
+- volume: Volume in cubic meters as a number (0 if not present)
+
+Return ONLY valid JSON in this exact format — no extra text, no markdown:
 {
   "header": {
-    "exporterName": "",
-    "exporterAddress": "",
-    "importerName": "",
-    "importerAddress": "",
-    "importerNui": "",
-    "invoiceNumber": "",
-    "invoiceDate": "",
-    "containerNumber": "",
-    "incoterm": "",
-    "portOfLoading": "",
-    "portOfDischarge": "",
-    "placeOfDelivery": "",
-    "countryOfExport": "",
-    "countryOfOrigin": "",
-    "countryOfDestination": "",
-    "currency": "",
-    "totalInvoice": 0,
-    "totalGrossWeight": 0,
-    "totalPackages": 0,
-    "totalVolume": 0,
-    "transportMode": "",
-    "transportIdentity": "",
-    "cmrNumber": "",
-    "vehiclePlate": ""
+    "exporterName": "", "exporterAddress": "", "importerName": "", "importerAddress": "",
+    "importerNui": "", "invoiceNumber": "", "invoiceDate": "", "containerNumber": "",
+    "incoterm": "", "portOfLoading": "", "portOfDischarge": "", "placeOfDelivery": "",
+    "countryOfExport": "", "countryOfOrigin": "", "countryOfDestination": "",
+    "currency": "", "totalInvoice": 0, "totalGrossWeight": 0, "totalPackages": 0,
+    "totalVolume": 0, "transportMode": "", "transportIdentity": "", "cmrNumber": "", "vehiclePlate": ""
   },
   "items": [
     {
-      "itemNo": "",
-      "descriptionEn": "",
-      "qty": 0,
-      "unit": "",
-      "unitPrice": 0,
-      "totalValue": 0,
-      "packages": 0,
-      "grossWeight": 0,
-      "netWeight": 0,
-      "volume": 0
+      "itemNo": "", "descriptionEn": "", "qty": 0, "unit": "", "unitPrice": 0,
+      "totalValue": 0, "packages": 0, "grossWeight": 0, "netWeight": 0, "volume": 0
     }
   ]
 }
 
-Rules:
-- Extract ALL line items from the invoice
-- Use original English descriptions
-- If a field is not found, use empty string or 0
-- Return ONLY the JSON, no explanation`
+IMPORTANT: Extract ALL line items. Do not skip any rows. Use 0 for missing numbers, "" for missing strings.`
 
-  const messages: { role: string; content: unknown[] }[] = [
-    {
-      role: 'user',
-      content: [
-        { type: 'text', text: prompt },
-        ...base64Images.map(img => ({
-          type: 'image_url',
-          image_url: { url: `data:${mimeType};base64,${img}`, detail: 'high' },
-        })),
-      ],
-    },
-  ]
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini', // vision-capable; gpt-5-mini is text-only
-      messages,
-      max_completion_tokens: 4096,
-    }),
-  })
-
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`OpenAI API error: ${err}`)
-  }
-
-  const data = await response.json()
-  const content = data.choices?.[0]?.message?.content || '{}'
-
-  let parsed: { header: Partial<HeaderData>; items: Partial<InvoiceItem>[] }
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content)
-  } catch {
-    throw new Error('Failed to parse AI response as JSON')
-  }
-
-  const rules = getTariffRules()
-  const items: InvoiceItem[] = (parsed.items || []).map((item, idx) => {
-    const tariffRule = findTariffByKeyword(item.descriptionEn || '', rules)
-    return {
-      id: `item_${idx + 1}`,
-      itemNo: item.itemNo || String(idx + 1),
-      descriptionEn: item.descriptionEn || '',
-      descriptionSq: translateToAlbanian(item.descriptionEn || ''),
-      qty: Number(item.qty) || 0,
-      unit: item.unit || 'PCS',
-      unitPrice: Number(item.unitPrice) || 0,
-      totalValue: Number(item.totalValue) || 0,
-      packages: Number(item.packages) || 0,
-      grossWeight: Number(item.grossWeight) || 0,
-      netWeight: Number(item.netWeight) || 0,
-      volume: Number(item.volume) || 0,
-      tariffCode: tariffRule?.tariffCode || '',
-      customsRate: tariffRule?.customsRate || 10,
-      vatRate: tariffRule?.vatRate || 18,
-      status: tariffRule ? 'ok' : 'review',
-    }
-  })
-
-  return {
-    header: parsed.header || {},
-    items,
-    missingFields: [],
-  }
-}
-
-/* ── Reusable: build InvoiceItem array from parsed items ──── */
-function buildItems(parsed: { header: Partial<HeaderData>; items: Partial<InvoiceItem>[] }): InvoiceItem[] {
+/* ── Build InvoiceItem array from AI response ────────────────── */
+function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<InvoiceItem>[] }): InvoiceItem[] {
   const rules = getTariffRules()
   return (parsed.items || []).map((item, idx) => {
     const tariffRule = findTariffByKeyword(item.descriptionEn || '', rules)
     return {
       id: `item_${idx + 1}`,
-      itemNo: item.itemNo || String(idx + 1),
+      itemNo:        item.itemNo        || String(idx + 1),
       descriptionEn: item.descriptionEn || '',
       descriptionSq: translateToAlbanian(item.descriptionEn || ''),
-      qty: Number(item.qty) || 0,
-      unit: item.unit || 'PCS',
-      unitPrice: Number(item.unitPrice) || 0,
-      totalValue: Number(item.totalValue) || 0,
-      packages: Number(item.packages) || 0,
-      grossWeight: Number(item.grossWeight) || 0,
-      netWeight: Number(item.netWeight) || 0,
-      volume: Number(item.volume) || 0,
-      tariffCode: tariffRule?.tariffCode || '',
-      customsRate: tariffRule?.customsRate || 10,
-      vatRate: tariffRule?.vatRate || 18,
-      status: tariffRule ? 'ok' : 'review',
+      qty:           Number(item.qty)         || 0,
+      unit:          item.unit               || 'PCS',
+      unitPrice:     Number(item.unitPrice)   || 0,
+      totalValue:    Number(item.totalValue)  || 0,
+      packages:      Number(item.packages)    || 0,
+      grossWeight:   Number(item.grossWeight) || 0,
+      netWeight:     Number(item.netWeight)   || 0,
+      volume:        Number(item.volume)      || 0,
+      tariffCode:    tariffRule?.tariffCode   || '',
+      customsRate:   tariffRule?.customsRate  ?? 10,
+      vatRate:       tariffRule?.vatRate      ?? 18,
+      status:        tariffRule ? 'ok' : 'review',
     }
   })
 }
 
-/* ── Reusable: call OpenAI and parse JSON ─────────────────── */
+/* ── Call OpenAI Chat Completions ────────────────────────────── */
 async function callOpenAI(
   apiKey: string,
   model: string,
@@ -222,62 +154,123 @@ async function callOpenAI(
       max_completion_tokens: maxTokens,
     }),
   })
-  if (!res.ok) throw new Error(`OpenAI API error: ${await res.text()}`)
-  const data    = await res.json()
-  const raw     = data.choices?.[0]?.message?.content || '{}'
-  const match   = raw.match(/\{[\s\S]*\}/)
+  if (!res.ok) {
+    const errText = await res.text()
+    console.error('[AI] callOpenAI error:', errText)
+    throw new Error(`OpenAI API error: ${errText}`)
+  }
+  const data = await res.json()
+  const raw  = data.choices?.[0]?.message?.content || ''
+  if (!raw) throw new Error('OpenAI returned empty response')
+
+  const match = raw.match(/\{[\s\S]*\}/)
+  if (!match) throw new Error(`AI did not return valid JSON. Response: ${raw.slice(0, 300)}`)
+
   try {
-    return JSON.parse(match ? match[0] : raw)
-  } catch {
-    throw new Error(`Failed to parse AI response as JSON. Raw: ${raw.slice(0, 200)}`)
+    return JSON.parse(match[0])
+  } catch (e) {
+    throw new Error(`JSON parse failed: ${e}. Raw: ${raw.slice(0, 300)}`)
   }
 }
 
-/* ── The shared extraction prompt ────────────────────────── */
-const EXTRACTION_PROMPT = `You are a customs document data extractor. Extract ALL data from this invoice/packing list document.
+/* ── Upload PDF to OpenAI Files API ──────────────────────────── */
+async function uploadPdfFile(apiKey: string, b64: string, filename: string): Promise<string> {
+  const buffer = Buffer.from(b64, 'base64')
+  const blob   = new Blob([buffer], { type: 'application/pdf' })
 
-Return ONLY valid JSON in this exact format:
-{
-  "header": {
-    "exporterName": "", "exporterAddress": "", "importerName": "", "importerAddress": "",
-    "importerNui": "", "invoiceNumber": "", "invoiceDate": "", "containerNumber": "",
-    "incoterm": "", "portOfLoading": "", "portOfDischarge": "", "placeOfDelivery": "",
-    "countryOfExport": "", "countryOfOrigin": "", "countryOfDestination": "",
-    "currency": "", "totalInvoice": 0, "totalGrossWeight": 0, "totalPackages": 0,
-    "totalVolume": 0, "transportMode": "", "transportIdentity": "", "cmrNumber": "", "vehiclePlate": ""
-  },
-  "items": [
-    { "itemNo": "", "descriptionEn": "", "qty": 0, "unit": "", "unitPrice": 0,
-      "totalValue": 0, "packages": 0, "grossWeight": 0, "netWeight": 0, "volume": 0 }
-  ]
+  const fd = new FormData()
+  fd.append('file', blob, filename)
+  fd.append('purpose', 'user_data')
+
+  const res = await fetch('https://api.openai.com/v1/files', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: fd,
+  })
+  if (!res.ok) {
+    const errText = await res.text()
+    console.error('[AI] File upload error:', errText)
+    throw new Error(`PDF upload failed: ${errText}`)
+  }
+  const data = await res.json()
+  console.log(`[AI] Uploaded PDF "${filename}" → file_id: ${data.id}`)
+  return data.id as string
 }
 
-Rules:
-- Extract ALL line items — do not skip any row
-- Use original English descriptions
-- Empty string or 0 for missing fields
-- Return ONLY the JSON, no explanation`
+async function deletePdfFile(apiKey: string, fileId: string): Promise<void> {
+  await fetch(`https://api.openai.com/v1/files/${fileId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${apiKey}` },
+  }).catch(e => console.warn(`[AI] Could not delete file ${fileId}:`, e))
+}
 
-/* ── PDF-native extraction via OpenAI file content block ─── */
-// OpenAI processes PDF natively (extracts text + renders pages) — no local parsing needed
+/* ════════════════════════════════════════════════════════════════
+   MAIN EXPORT FUNCTIONS
+   ════════════════════════════════════════════════════════════════ */
+
+/**
+ * Extract from PDF files using OpenAI Files API.
+ * PDFs are uploaded, referenced by file_id, then deleted.
+ * gpt-4o-mini processes them natively (text + page images).
+ */
 export async function extractWithPdf(
   pdfBase64s: string[],
-  imageBase64s: string[] = []
+  imageBase64s: string[] = [],
+  imageMimeTypes: string[] = []
+): Promise<ExtractionResult> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) throw new Error('OPENAI_API_KEY not configured')
+
+  const fileIds: string[] = []
+  try {
+    // Upload each PDF to Files API and get file_id
+    for (let i = 0; i < pdfBase64s.length; i++) {
+      const fileId = await uploadPdfFile(apiKey, pdfBase64s[i], `invoice_${i + 1}.pdf`)
+      fileIds.push(fileId)
+    }
+
+    const content: unknown[] = [
+      { type: 'text', text: EXTRACTION_PROMPT },
+      // Reference uploaded PDFs by file_id (OpenAI processes natively)
+      ...fileIds.map(fileId => ({
+        type: 'file',
+        file: { file_id: fileId },
+      })),
+      // Any additional images (JPG/PNG/WEBP)
+      ...imageBase64s.map((b64, i) => ({
+        type: 'image_url',
+        image_url: {
+          url: `data:${imageMimeTypes[i] || 'image/jpeg'};base64,${b64}`,
+          detail: 'high',
+        },
+      })),
+    ]
+
+    const parsed = await callOpenAI(apiKey, 'gpt-4o-mini', content, 4096)
+    return { header: parsed.header || {}, items: buildItems(parsed), missingFields: [] }
+  } finally {
+    // Always clean up uploaded files (privacy + storage)
+    if (fileIds.length > 0) {
+      await Promise.allSettled(fileIds.map(id => deletePdfFile(apiKey, id)))
+    }
+  }
+}
+
+/**
+ * Extract from images (JPG/PNG/WEBP) using OpenAI Vision.
+ */
+export async function extractWithAI(
+  base64Images: string[],
+  mimeType: string
 ): Promise<ExtractionResult> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY not configured')
 
   const content: unknown[] = [
     { type: 'text', text: EXTRACTION_PROMPT },
-    // PDFs sent as OpenAI file content blocks (native PDF support)
-    ...pdfBase64s.map((b64, i) => ({
-      type: 'file',
-      file: { filename: `invoice_${i + 1}.pdf`, file_data: b64 },
-    })),
-    // Any additional images
-    ...imageBase64s.map(b64 => ({
+    ...base64Images.map(img => ({
       type: 'image_url',
-      image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'high' },
+      image_url: { url: `data:${mimeType};base64,${img}`, detail: 'high' },
     })),
   ]
 
@@ -285,124 +278,42 @@ export async function extractWithPdf(
   return { header: parsed.header || {}, items: buildItems(parsed), missingFields: [] }
 }
 
-/* ── Text-based extraction (for PDFs with extractable text) ── */
+/**
+ * Extract from plain text (used as fallback or for already-extracted text).
+ */
 export async function extractWithText(text: string): Promise<ExtractionResult> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY not configured')
 
-  // Trim text to avoid token limit (keep first 12000 chars — enough for a full invoice)
-  const trimmed = text.slice(0, 12000)
+  const trimmed = text.slice(0, 14000)
 
-  const prompt = `You are a customs document data extractor. Extract ALL data from this invoice/packing list text.
+  const prompt = `${EXTRACTION_PROMPT}
 
-Return ONLY valid JSON in this exact format:
-{
-  "header": {
-    "exporterName": "", "exporterAddress": "", "importerName": "", "importerAddress": "",
-    "importerNui": "", "invoiceNumber": "", "invoiceDate": "", "containerNumber": "",
-    "incoterm": "", "portOfLoading": "", "portOfDischarge": "", "placeOfDelivery": "",
-    "countryOfExport": "", "countryOfOrigin": "", "countryOfDestination": "",
-    "currency": "", "totalInvoice": 0, "totalGrossWeight": 0, "totalPackages": 0,
-    "totalVolume": 0, "transportMode": "", "transportIdentity": "", "cmrNumber": "", "vehiclePlate": ""
-  },
-  "items": [
-    { "itemNo": "", "descriptionEn": "", "qty": 0, "unit": "", "unitPrice": 0,
-      "totalValue": 0, "packages": 0, "grossWeight": 0, "netWeight": 0, "volume": 0 }
-  ]
+Document text to extract from:
+---
+${trimmed}
+---`
+
+  const content = [{ type: 'text', text: prompt }]
+  const parsed  = await callOpenAI(apiKey, 'gpt-5-mini', content, 4096)
+  return { header: parsed.header || {}, items: buildItems(parsed), missingFields: [] }
 }
 
-Rules:
-- Extract ALL line items
-- Use English descriptions
-- Empty string or 0 for missing fields
-- Return ONLY the JSON
-
-Document text:
-${trimmed}`
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: 'gpt-5-mini',
-      messages: [{ role: 'user', content: prompt }],
-      max_completion_tokens: 4096,
-    }),
-  })
-
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`OpenAI API error: ${err}`)
-  }
-
-  const data    = await response.json()
-  const content = data.choices?.[0]?.message?.content || '{}'
-
-  let parsed: { header: Partial<HeaderData>; items: Partial<InvoiceItem>[] }
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content)
-  } catch {
-    throw new Error('Failed to parse AI response as JSON')
-  }
-
-  const rules = getTariffRules()
-  const items: InvoiceItem[] = (parsed.items || []).map((item, idx) => {
-    const tariffRule = findTariffByKeyword(item.descriptionEn || '', rules)
-    return {
-      id: `item_${idx + 1}`,
-      itemNo: item.itemNo || String(idx + 1),
-      descriptionEn: item.descriptionEn || '',
-      descriptionSq: translateToAlbanian(item.descriptionEn || ''),
-      qty: Number(item.qty) || 0,
-      unit: item.unit || 'PCS',
-      unitPrice: Number(item.unitPrice) || 0,
-      totalValue: Number(item.totalValue) || 0,
-      packages: Number(item.packages) || 0,
-      grossWeight: Number(item.grossWeight) || 0,
-      netWeight: Number(item.netWeight) || 0,
-      volume: Number(item.volume) || 0,
-      tariffCode: tariffRule?.tariffCode || '',
-      customsRate: tariffRule?.customsRate || 10,
-      vatRate: tariffRule?.vatRate || 18,
-      status: tariffRule ? 'ok' : 'review',
-    }
-  })
-
-  return { header: parsed.header || {}, items, missingFields: [] }
-}
-
+/**
+ * Extract fields from a voice transcript.
+ */
 export async function extractWithVoice(transcript: string): Promise<ExtractionResult> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY not configured')
 
   const prompt = `Extract customs declaration data from this voice/text input. Return ONLY valid JSON.
 
-Text: "${transcript}"
+Input: "${transcript}"
 
-Return JSON with fields: importerName, exporterName, invoiceNumber, containerNumber, countryOfOrigin, incoterm, portOfLoading, totalInvoice, currency
+Return JSON with this exact structure:
+{"header": {"importerName":"","exporterName":"","invoiceNumber":"","containerNumber":"","countryOfOrigin":"","incoterm":"","portOfLoading":"","portOfDischarge":"","totalInvoice":0,"currency":"","totalGrossWeight":0,"totalPackages":0}, "items":[]}`
 
-Format: {"header": {...}, "items": []}`
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: 'gpt-5-mini',
-      messages: [{ role: 'user', content: prompt }],
-      max_completion_tokens: 1024,
-    }),
-  })
-
-  if (!response.ok) throw new Error('Voice extraction failed')
-
-  const data = await response.json()
-  const content = data.choices?.[0]?.message?.content || '{}'
-  let parsed: { header: Partial<HeaderData>; items: Partial<InvoiceItem>[] } = { header: {}, items: [] }
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content)
-  } catch {}
-
+  const content = [{ type: 'text', text: prompt }]
+  const parsed  = await callOpenAI(apiKey, 'gpt-5-mini', content, 1024)
   return { header: parsed.header || {}, items: [], missingFields: [] }
 }
