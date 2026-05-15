@@ -180,6 +180,111 @@ Rules:
   }
 }
 
+/* ── Reusable: build InvoiceItem array from parsed items ──── */
+function buildItems(parsed: { header: Partial<HeaderData>; items: Partial<InvoiceItem>[] }): InvoiceItem[] {
+  const rules = getTariffRules()
+  return (parsed.items || []).map((item, idx) => {
+    const tariffRule = findTariffByKeyword(item.descriptionEn || '', rules)
+    return {
+      id: `item_${idx + 1}`,
+      itemNo: item.itemNo || String(idx + 1),
+      descriptionEn: item.descriptionEn || '',
+      descriptionSq: translateToAlbanian(item.descriptionEn || ''),
+      qty: Number(item.qty) || 0,
+      unit: item.unit || 'PCS',
+      unitPrice: Number(item.unitPrice) || 0,
+      totalValue: Number(item.totalValue) || 0,
+      packages: Number(item.packages) || 0,
+      grossWeight: Number(item.grossWeight) || 0,
+      netWeight: Number(item.netWeight) || 0,
+      volume: Number(item.volume) || 0,
+      tariffCode: tariffRule?.tariffCode || '',
+      customsRate: tariffRule?.customsRate || 10,
+      vatRate: tariffRule?.vatRate || 18,
+      status: tariffRule ? 'ok' : 'review',
+    }
+  })
+}
+
+/* ── Reusable: call OpenAI and parse JSON ─────────────────── */
+async function callOpenAI(
+  apiKey: string,
+  model: string,
+  content: unknown[],
+  maxTokens = 4096
+): Promise<{ header: Partial<HeaderData>; items: Partial<InvoiceItem>[] }> {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content }],
+      max_completion_tokens: maxTokens,
+    }),
+  })
+  if (!res.ok) throw new Error(`OpenAI API error: ${await res.text()}`)
+  const data    = await res.json()
+  const raw     = data.choices?.[0]?.message?.content || '{}'
+  const match   = raw.match(/\{[\s\S]*\}/)
+  try {
+    return JSON.parse(match ? match[0] : raw)
+  } catch {
+    throw new Error(`Failed to parse AI response as JSON. Raw: ${raw.slice(0, 200)}`)
+  }
+}
+
+/* ── The shared extraction prompt ────────────────────────── */
+const EXTRACTION_PROMPT = `You are a customs document data extractor. Extract ALL data from this invoice/packing list document.
+
+Return ONLY valid JSON in this exact format:
+{
+  "header": {
+    "exporterName": "", "exporterAddress": "", "importerName": "", "importerAddress": "",
+    "importerNui": "", "invoiceNumber": "", "invoiceDate": "", "containerNumber": "",
+    "incoterm": "", "portOfLoading": "", "portOfDischarge": "", "placeOfDelivery": "",
+    "countryOfExport": "", "countryOfOrigin": "", "countryOfDestination": "",
+    "currency": "", "totalInvoice": 0, "totalGrossWeight": 0, "totalPackages": 0,
+    "totalVolume": 0, "transportMode": "", "transportIdentity": "", "cmrNumber": "", "vehiclePlate": ""
+  },
+  "items": [
+    { "itemNo": "", "descriptionEn": "", "qty": 0, "unit": "", "unitPrice": 0,
+      "totalValue": 0, "packages": 0, "grossWeight": 0, "netWeight": 0, "volume": 0 }
+  ]
+}
+
+Rules:
+- Extract ALL line items — do not skip any row
+- Use original English descriptions
+- Empty string or 0 for missing fields
+- Return ONLY the JSON, no explanation`
+
+/* ── PDF-native extraction via OpenAI file content block ─── */
+// OpenAI processes PDF natively (extracts text + renders pages) — no local parsing needed
+export async function extractWithPdf(
+  pdfBase64s: string[],
+  imageBase64s: string[] = []
+): Promise<ExtractionResult> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) throw new Error('OPENAI_API_KEY not configured')
+
+  const content: unknown[] = [
+    { type: 'text', text: EXTRACTION_PROMPT },
+    // PDFs sent as OpenAI file content blocks (native PDF support)
+    ...pdfBase64s.map((b64, i) => ({
+      type: 'file',
+      file: { filename: `invoice_${i + 1}.pdf`, file_data: b64 },
+    })),
+    // Any additional images
+    ...imageBase64s.map(b64 => ({
+      type: 'image_url',
+      image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'high' },
+    })),
+  ]
+
+  const parsed = await callOpenAI(apiKey, 'gpt-4o-mini', content, 4096)
+  return { header: parsed.header || {}, items: buildItems(parsed), missingFields: [] }
+}
+
 /* ── Text-based extraction (for PDFs with extractable text) ── */
 export async function extractWithText(text: string): Promise<ExtractionResult> {
   const apiKey = process.env.OPENAI_API_KEY
