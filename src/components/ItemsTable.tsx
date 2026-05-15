@@ -193,8 +193,19 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                   <td className={cellClass}>
                     <button
                       onClick={() => removeItem(idx)}
-                      className="text-red-400 hover:text-red-600"
-                    >✕</button>
+                      style={{
+                        width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)',
+                        background: 'var(--surface-3)', color: 'var(--t4)', cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all .15s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--red-bg)'; e.currentTarget.style.color = 'var(--red)'; e.currentTarget.style.borderColor = 'var(--red-bdr)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface-3)'; e.currentTarget.style.color = 'var(--t4)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
                   </td>
                 </tr>
               )
