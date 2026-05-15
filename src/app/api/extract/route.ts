@@ -8,11 +8,9 @@ const isPdf = (file: File) =>
   file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
 
 async function pdfToText(buffer: Buffer): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mod = await import('pdf-parse') as any
-  const pdfParse = mod.default ?? mod
-  const data = await pdfParse(buffer)
-  return data.text || ''
+  const { extractText } = await import('unpdf')
+  const { text } = await extractText(new Uint8Array(buffer), { mergePages: true })
+  return text || ''
 }
 
 export async function POST(req: NextRequest) {

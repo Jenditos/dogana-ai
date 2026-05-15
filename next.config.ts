@@ -5,8 +5,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
-  // pdf-parse uses fs/path at runtime — must not be bundled by Next.js
-  serverExternalPackages: ['pdf-parse'],
+  // unpdf is serverless-compatible, no serverExternalPackages needed
 };
 
 export default nextConfig;
