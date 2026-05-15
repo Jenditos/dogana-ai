@@ -37,13 +37,12 @@ export async function POST(req: NextRequest) {
             console.log(`[Extract] PDF text extracted: ${text.length} chars from "${file.name}"`)
             pdfTexts.push(text)
           } else {
-            // PDF has no extractable text (scanned) → treat as image via base64
-            console.log(`[Extract] PDF has no text layer, sending as image: "${file.name}"`)
-            base64Images.push(buffer.toString('base64'))
+            // Scanned PDF — no text layer. Cannot send as image.
+            console.warn(`[Extract] PDF has no text layer (scanned): "${file.name}"`)
+            throw new Error(`PDF "${file.name}" është i skanuar (pa tekst). Konverto faqet si foto JPG/PNG dhe ngarko imazhet.`)
           }
         } catch (err) {
-          console.warn('[Extract] pdf-parse failed, falling back to image:', err)
-          base64Images.push(buffer.toString('base64'))
+          throw err  // re-throw, caught by outer try/catch
         }
       } else {
         base64Images.push(buffer.toString('base64'))
