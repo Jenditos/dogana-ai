@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import type { HeaderData, InvoiceItem, AsycudaPosition, MissingField, AppSettings, TariffRule, Language } from '@/types'
 import { t, getLanguage } from '@/lib/i18n'
 import { getTariffRules } from '@/lib/tariffMapper'
@@ -11,6 +11,7 @@ import ItemsTable from '@/components/ItemsTable'
 import ExportPanel from '@/components/ExportPanel'
 import Settings from '@/components/Settings'
 import VoiceInput from '@/components/VoiceInput'
+import CameraCapture from '@/components/CameraCapture'
 
 /* ─── SVG Icons ──────────────────────────────────────────────── */
 const IcoUpload = () => (
@@ -262,6 +263,7 @@ export default function Home() {
   const [lang, setLang]               = useState<Language>('sq')
   const [step, setStep]               = useState<Step>('upload')
   const [activeAction, setActiveAction] = useState<'upload' | 'voice' | 'camera' | null>('upload')
+  const [showCamera, setShowCamera]   = useState(false)
   const [loading, setLoading]         = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [settings, setSettings]       = useState<AppSettings>(DEFAULT_SETTINGS)
@@ -273,7 +275,7 @@ export default function Home() {
   const [positions, setPositions]     = useState<AsycudaPosition[]>([])
   const [missingFields, setMissingFields] = useState<MissingField[]>([])
 
-  const cameraRef = useRef<HTMLInputElement>(null)
+  // cameraRef removed — using CameraCapture modal instead
 
   useEffect(() => {
     const savedLang = getLanguage()
@@ -431,7 +433,7 @@ export default function Home() {
                   title={sq ? 'Bëj foto' : 'Take photo'}
                   desc={sq ? 'Fotografo dokumentet direkt nga pajisja.' : 'Photograph documents directly from your device.'}
                   active={activeAction === 'camera'}
-                  onClick={() => { setActiveAction('camera'); cameraRef.current?.click() }}
+                  onClick={() => { setActiveAction('camera'); setShowCamera(true) }}
                 />
                 <ActionCard
                   icon={<IcoMic />}
@@ -442,9 +444,7 @@ export default function Home() {
                 />
               </div>
 
-              {/* Hidden camera input */}
-              <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={e => { if (e.target.files?.[0]) handleFilesUpload([e.target.files[0]]) }} />
+              {/* Camera modal trigger — handled by CameraCapture component */}
             </div>
 
             {/* Upload zone (conditional) */}
@@ -630,6 +630,15 @@ export default function Home() {
         )}
 
       </main>
+
+      {/* ── Camera modal ─────────────────────────────────────── */}
+      {showCamera && (
+        <CameraCapture
+          lang={lang}
+          onCapture={file => { handleFilesUpload([file]); setActiveAction(null) }}
+          onClose={() => { setShowCamera(false); setActiveAction(null) }}
+        />
+      )}
 
       {/* ── Settings modal ───────────────────────────────────── */}
       {showSettings && (
