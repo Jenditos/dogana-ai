@@ -230,3 +230,11 @@ input[type="number"] { -moz-appearance: textfield; }
   animation: shimmer 1.4s ease infinite;
   border-radius: 8px;
 }
+
+/* ── Responsive stat cards grid ─────────────────────────────── */
+@media (max-width: 900px) {
+  .stat-cards-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+@media (max-width: 500px) {
+  .stat-cards-grid { grid-template-columns: 1fr !important; }
+}

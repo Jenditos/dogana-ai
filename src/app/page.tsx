@@ -697,107 +697,91 @@ export default function Home() {
         {step === 'review' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }} className="a-fade-up">
 
-            {/* ══ A. GUIDED HEADER ══════════════════════════════════ */}
-            <div>
-              <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t4)' }}>
-                {sq ? 'Hapi 2 nga 3' : 'Step 2 of 3'}
-              </p>
-              <h2 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 800, color: 'var(--t1)', letterSpacing: '-.01em' }}>
-                {sq ? 'Kontrollo të dhënat' : 'Review data'}
-              </h2>
-              <p style={{ margin: 0, fontSize: 14, color: 'var(--t3)' }}>
-                {missingRowCount > 0
-                  ? (sq ? 'Plotëso fillimisht mungesat e kuqe, pastaj konfirmo kodet e propozuara.' : 'Fill the red missing fields first, then confirm proposed codes.')
-                  : reviewCount > 0
-                    ? (sq ? 'Të gjitha të dhënat janë plotësuar. Konfirmo kodet e propozuara para eksportit.' : 'All fields are filled. Confirm proposed codes before export.')
-                    : (sq ? 'Të gjitha të dhënat janë gati. Mund të vazhdosh te eksporti.' : 'All data is ready. You can continue to export.')}
-              </p>
-            </div>
-
-            {/* ══ B. STATUS OVERVIEW (compact numbers) ══════════════ */}
+            {/* ══ A+B+C: STAT CARDS + LEGEND + WARNING BOX ══════════ */}
             {items.length > 0 && (
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {[
-                  { n: items.length,     label: sq ? 'rreshta fature'  : 'invoice rows',    color: 'var(--blue)',  bg: 'var(--blue-50)',  bdr: 'var(--blue-200)' },
-                  { n: positions.length, label: sq ? 'pozicione ASYCUDA': 'ASYCUDA pos.',   color: 'var(--t3)',    bg: 'var(--surface-3)',bdr: 'var(--border)' },
-                  { n: missingRowCount,  label: sq ? 'me mungesa'       : 'missing',         color: missingRowCount > 0 ? 'var(--red)'   : 'var(--green)', bg: missingRowCount > 0 ? 'var(--red-bg)'   : 'var(--green-bg)',  bdr: missingRowCount > 0 ? 'var(--red-bdr)'   : 'var(--green-bdr)' },
-                  { n: reviewCount,      label: sq ? 'kode për kontroll': 'codes to review', color: reviewCount > 0 ? 'var(--amber)' : 'var(--green)', bg: reviewCount > 0     ? 'var(--amber-bg)' : 'var(--green-bg)',  bdr: reviewCount > 0     ? 'var(--amber-bdr)' : 'var(--green-bdr)' },
-                ].map(({ n, label, color, bg, bdr }) => (
-                  <div key={label} style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '8px 14px', borderRadius: 10,
-                    background: bg, border: `1px solid ${bdr}`,
-                  }}>
-                    <span style={{ fontSize: 20, fontWeight: 900, color, lineHeight: 1 }}>{n}</span>
-                    <span style={{ fontSize: 12, color: 'var(--t3)', fontWeight: 500 }}>{label}</span>
-                  </div>
-                ))}
-                {/* Color key — inline and tiny */}
-                <div style={{ display:'flex', alignItems:'center', gap:12, padding:'8px 12px', borderRadius:10, background:'var(--surface-2)', border:'1px solid var(--border)', marginLeft:'auto' }}>
-                  {[['var(--red)','E kuqe','Red'],['var(--amber)','Portokalli','Orange'],['var(--green)','Gjelbër','Green']].map(([c,sq_,en_]) => (
-                    <span key={c} style={{ display:'flex', alignItems:'center', gap:4, fontSize:11, color:'var(--t4)' }}>
-                      <span style={{ width:7, height:7, borderRadius:'50%', background:c, flexShrink:0 }} />
-                      {sq ? sq_ : en_}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} className="a-fade-in">
+
+                {/* ── 4 Large Status Cards ── */}
+                <div className="stat-cards-grid" style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: 14,
+                }}>
+                  {/* Card 1 — Blue */}
+                  <StatCard value={items.length}     label={sq ? 'RRESHTA FATURE'      : 'INVOICE ROWS'}         subtitle={sq ? 'nga dokumenti'              : 'from document'}             color="blue" />
+                  {/* Card 2 — Green */}
+                  <StatCard value={positions.length} label={sq ? 'POZICIONE ASYCUDA'   : 'ASYCUDA POSITIONS'}    subtitle={sq ? 'grupe sipas kodit tarifor'   : 'grouped by tariff code'}     color="green" />
+                  {/* Card 3 — Red or green */}
+                  <StatCard value={missingRowCount}  label={sq ? 'RRESHTA ME MUNGESA'  : 'ROWS WITH MISSING'}    subtitle={sq ? 'plotëso para eksportit'      : 'fill before export'}          color={missingRowCount > 0 ? 'red' : 'green'} />
+                  {/* Card 4 — Amber or green */}
+                  <StatCard value={reviewCount}      label={sq ? 'KODE PËR KONTROLL'   : 'CODES TO REVIEW'}      subtitle={sq ? 'propozuar, duhet konfirmuar' : 'proposed, needs confirm'}     color={reviewCount > 0 ? 'amber' : 'green'} />
+                </div>
+
+                {/* ── Color legend ── */}
+                <div style={{
+                  display: 'flex', gap: 20, flexWrap: 'wrap',
+                  padding: '10px 16px', borderRadius: 12,
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  boxShadow: 'var(--sh-xs)',
+                }}>
+                  {[
+                    { color: 'var(--red)',   sq: 'E kuqe — plotëso para se të vazhdosh.',    en: 'Red — fill before continuing.' },
+                    { color: 'var(--amber)', sq: 'Portokalli — kontrollo dhe konfirmo.',      en: 'Orange — check and confirm.' },
+                    { color: 'var(--green)', sq: 'Gjelbër — gati.',                          en: 'Green — ready.' },
+                  ].map(({ color, sq: sqTxt, en: enTxt }) => (
+                    <span key={color} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--t3)' }}>
+                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                      {sq ? sqTxt : enTxt}
                     </span>
                   ))}
                 </div>
-              </div>
-            )}
 
-            {/* ══ C. ACTION BOX — small, calm, focused ══════════════ */}
-            {items.length > 0 && (
-              <div>
+                {/* ── Warning / status box ── */}
                 {missingRowCount > 0 ? (
-                  /* ── Red: must fix before continuing ── */
                   <div style={{
-                    background: 'var(--surface)', border: '1.5px solid var(--red-bdr)',
-                    borderRadius: 14, padding: '16px 20px',
-                    borderLeft: '4px solid var(--red)',
+                    background: 'var(--red-bg)', border: '1.5px solid var(--red-bdr)',
+                    borderRadius: 16, padding: '18px 22px',
+                    display: 'flex', alignItems: 'flex-start', gap: 14,
                   }}>
-                    <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:16, flexWrap:'wrap' }}>
-                      <div>
-                        <p style={{ margin:'0 0 2px', fontSize:14, fontWeight:800, color:'var(--red)' }}>
-                          {sq ? 'Nuk mund të vazhdosh ende' : 'Cannot continue yet'}
-                        </p>
-                        <p style={{ margin:'0 0 10px', fontSize:13, color:'var(--t3)' }}>
-                          {sq ? `${missingRowCount} rreshta kanë të dhëna që mungojnë. Duhet t'i plotësosh para se të vazhdosh.` : `${missingRowCount} rows have missing data. Fill them before continuing.`}
-                        </p>
-                        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                          {missingByType.tariffCode > 0  && <span style={{ padding:'3px 10px', borderRadius:99, background:'var(--red-bg)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.tariffCode} {sq?'kode tarifore':'tariff codes'}</span>}
-                          {missingByType.grossWeight > 0 && <span style={{ padding:'3px 10px', borderRadius:99, background:'var(--red-bg)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.grossWeight} {sq?'pesha bruto':'weights'}</span>}
-                          {missingByType.qty > 0         && <span style={{ padding:'3px 10px', borderRadius:99, background:'var(--red-bg)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.qty} {sq?'sasi':'quantities'}</span>}
-                          {missingByType.header > 0      && <span style={{ padding:'3px 10px', borderRadius:99, background:'var(--red-bg)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.header} {sq?'të dhëna dokumenti':'document fields'}</span>}
-                        </div>
+                    <div style={{
+                      width: 40, height: 40, borderRadius: '50%',
+                      background: 'rgba(220,38,38,.15)', color: 'var(--red)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      <IcoAlert />
+                    </div>
+                    <div>
+                      <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800, color: 'var(--red)' }}>
+                        {sq ? 'Nuk mund të vazhdosh ende' : 'Cannot continue yet'}
+                      </p>
+                      <p style={{ margin: '0 0 12px', fontSize: 13.5, color: 'rgba(220,38,38,.85)' }}>
+                        {sq
+                          ? `Janë gjetur ${missingFieldCount} fusha që mungojnë në ${missingRowCount} rreshta.`
+                          : `Found ${missingFieldCount} missing fields in ${missingRowCount} rows.`}
+                      </p>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {missingByType.tariffCode > 0  && <span style={{ padding:'4px 12px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:13, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.tariffCode} {sq?'kode tarifore':'tariff codes'}</span>}
+                        {missingByType.grossWeight > 0 && <span style={{ padding:'4px 12px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:13, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.grossWeight} {sq?'pesha bruto':'gross weights'}</span>}
+                        {missingByType.qty > 0         && <span style={{ padding:'4px 12px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:13, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.qty} {sq?'sasi':'quantities'}</span>}
+                        {missingByType.header > 0      && <span style={{ padding:'4px 12px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:13, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.header} {sq?'të dhëna dokumenti':'document fields'}</span>}
                       </div>
                     </div>
                   </div>
-                ) : reviewCount > 0 ? (
-                  /* ── Amber: all filled, codes need confirmation ── */
-                  <div style={{
-                    background: 'var(--surface)', border: '1.5px solid var(--amber-bdr)',
-                    borderRadius: 14, padding: '16px 20px', borderLeft: '4px solid var(--amber)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
-                  }}>
-                    <div>
-                      <p style={{ margin:'0 0 2px', fontSize:14, fontWeight:800, color:'var(--amber)' }}>
-                        {sq ? 'Konfirmo kodet e propozuara' : 'Confirm proposed codes'}
-                      </p>
-                      <p style={{ margin:0, fontSize:13, color:'var(--t3)' }}>
-                        {sq ? `${reviewCount} kode duhet të kontrollohen para eksportit final.` : `${reviewCount} codes need review before final export.`}
-                      </p>
-                    </div>
-                  </div>
                 ) : (
-                  /* ── Green: all done ── */
                   <div style={{
                     background: 'var(--green-bg)', border: '1px solid var(--green-bdr)',
-                    borderRadius: 14, padding: '14px 20px',
+                    borderRadius: 16, padding: '16px 22px',
                     display: 'flex', alignItems: 'center', gap: 12,
                   }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                    <p style={{ margin:0, fontSize:14, fontWeight:700, color:'var(--green)' }}>
-                      {sq ? 'Të gjitha të dhënat janë gati. Vazhdo te eksporti.' : 'All data is ready. Continue to export.'}
-                    </p>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    <div>
+                      <p style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 800, color: 'var(--green)' }}>
+                        {sq ? 'Gati për hapin tjetër' : 'Ready for the next step'}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 12.5, color: 'var(--green)' }}>
+                        {sq ? 'Të gjitha fushat e detyrueshme janë plotësuar.' : 'All mandatory fields have been filled.'}
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
