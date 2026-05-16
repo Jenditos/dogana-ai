@@ -101,20 +101,18 @@ FIELD MAPPING:
 - countryOfDestination: Destination country (e.g. "XK")
 - currency: Currency code (e.g. "EUR", "USD")
 - totalInvoice: Total invoice amount as number (e.g. 68869.16)
-- totalGrossWeight: Total gross weight in kg as number — ONLY if explicitly written in the document (e.g. "11200 kg"). If not found → 0
-- totalPackages: Total packages/cartons as number — ONLY if explicitly written (e.g. "562 CTN"). If not found → 0
-- totalVolume: Total volume in m³ — ONLY if explicitly written (e.g. "68.00 CBM"). If not found → 0
-- transportMode: Mode of transport — ONLY if written in document. If not found → ""
-- transportIdentity: Vehicle/vessel ID — ONLY if written. If not found → ""
-- cmrNumber: CMR number — ONLY if written. If not found → ""
-- vehiclePlate: Vehicle plate — ONLY if written. If not found → ""
+- totalGrossWeight: Total gross weight in kg as number — only if a line literally says e.g. "11200 kg" or "GW: 11200". If no such line exists → 0
+- totalPackages: Total packages/cartons as number — only if a line literally says e.g. "562 CTN" or "Total cartons: 562". If no such line exists → 0
+- totalVolume: Total volume in m³ — only if literally stated. If not → 0
+- transportMode: Only if literally in document → ""
+- transportIdentity: Only if literally in document → ""
+- cmrNumber: Only if literally in document → ""
+- vehiclePlate: Only if literally in document → ""
 
-CRITICAL — NEVER INVENT DATA:
-- If a field is not present in the document, use 0 (for numbers) or "" (for strings)
-- NEVER estimate, guess, or calculate totalGrossWeight or totalPackages from item data
-- NEVER use internal product codes as weight or package values
-- If the document has no Packing List and no explicit weight/package totals → totalGrossWeight=0, totalPackages=0
-- Only extract values that are LITERALLY written in the document
+VERIFICATION FIELDS (required, used for code-side validation):
+- totalGrossWeightFound: true if you found totalGrossWeight in an explicit line, false if you estimated or did not find it
+- totalPackagesFound: true if you found totalPackages in an explicit line, false if estimated or not found
+- totalVolumeFound: true if found explicitly, false otherwise
 
 Return ONLY: { "header": { ... } }`
 
@@ -378,6 +376,21 @@ function parseJSON(raw: string): { header: Partial<HeaderData>; items: Partial<I
   }
 }
 
+/* ── Code-side verification: zero out unconfirmed header fields ─
+ * The AI returns *Found flags. If the AI did NOT find the value in
+ * the document text, it sets the flag to false. We enforce 0 here
+ * regardless of what value the AI returned — this is DETERMINISTIC.
+ * ─────────────────────────────────────────────────────────────── */
+function enforceHeaderVerification(header: Record<string, unknown>): void {
+  if (!header.totalGrossWeightFound) header.totalGrossWeight = 0
+  if (!header.totalPackagesFound)     header.totalPackages   = 0
+  if (!header.totalVolumeFound)       header.totalVolume     = 0
+  // Clean up internal flags
+  delete header.totalGrossWeightFound
+  delete header.totalPackagesFound
+  delete header.totalVolumeFound
+}
+
 /* ── Upload PDF to OpenAI Files API ──────────────────────────── */
 async function uploadPdfFile(apiKey: string, b64: string, filename: string): Promise<string> {
   const buffer = Buffer.from(b64, 'base64')
@@ -450,10 +463,15 @@ export async function extractWithPdf(
       ...attachments,
     ])
     const headerParsed = parseJSON(headerRaw)
-    // Normalize date to DD.MM.YYYY for display
-    if (headerParsed.header?.invoiceDate) {
-      headerParsed.header.invoiceDate = normalizeDate(headerParsed.header.invoiceDate)
+    const h = headerParsed.header as Record<string, unknown>
+
+    // ── Normalize date ──
+    if (h?.invoiceDate) {
+      h.invoiceDate = normalizeDate(h.invoiceDate as string)
     }
+
+    // DETERMINISTIC: zero out any weight/packages the AI didn't explicitly find
+    enforceHeaderVerification(h)
 
     // ── Call 2: items with Invoice+PackingList merge logic ───
     // ITEMS_PROMPT explicitly tells GPT to look at ALL pages,
@@ -598,6 +616,7 @@ export async function extractWithAI(
   ])
   const headerP = parseJSON(hRaw)
   const itemsP  = parseJSON(iRaw)
+  enforceHeaderVerification((headerP.header || {}) as Record<string, unknown>)
   return { header: headerP.header || {}, items: buildItems({ header: headerP.header, items: itemsP.items || [] }), missingFields: [] }
 }
 
@@ -618,6 +637,7 @@ export async function extractWithText(text: string): Promise<ExtractionResult> {
   ])
   const headerP = parseJSON(hRaw)
   const itemsP  = parseJSON(iRaw)
+  enforceHeaderVerification((headerP.header || {}) as Record<string, unknown>)
   return { header: headerP.header || {}, items: buildItems({ header: headerP.header, items: itemsP.items || [] }), missingFields: [] }
 }
 
