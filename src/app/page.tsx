@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { HeaderData, InvoiceItem, AsycudaPosition, MissingField, AppSettings, TariffRule, Language } from '@/types'
 import { t, getLanguage } from '@/lib/i18n'
 import { getTariffRules } from '@/lib/tariffMapper'
@@ -12,6 +12,7 @@ import ExportPanel from '@/components/ExportPanel'
 import Settings from '@/components/Settings'
 import VoiceInput from '@/components/VoiceInput'
 import CameraCapture from '@/components/CameraCapture'
+import ProcessingCard, { type ProcessingState, type FileProcessState } from '@/components/ProcessingCard'
 
 /* ─── SVG Icons ──────────────────────────────────────────────── */
 const IcoUpload = () => (
@@ -326,6 +327,8 @@ export default function Home() {
   const [loading, setLoading]         = useState(false)
   const [loadingStep, setLoadingStep] = useState('')
   const [extractError, setExtractError] = useState<{ msg: string; tech?: string } | null>(null)
+  const [procState, setProcState]     = useState<ProcessingState | null>(null)
+  const progressTimerRef              = useRef<ReturnType<typeof setInterval> | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [showAsycuda, setShowAsycuda] = useState(false)          // collapsed by default
   const [expandedPos, setExpandedPos] = useState<number | null>(null) // source rows per position
@@ -365,39 +368,125 @@ export default function Home() {
     localStorage.setItem('dudi_settings', JSON.stringify(s))
   }
 
+  // ── Progress timer: simulates smooth progress during API call ──
+  const advanceProgress = (targetPct: number, stepIdx: number) => {
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current)
+    progressTimerRef.current = setInterval(() => {
+      setProcState(prev => {
+        if (!prev) return prev
+        const current = prev.progress
+        if (current >= targetPct) {
+          clearInterval(progressTimerRef.current!)
+          return prev
+        }
+        // Slow down as we approach target
+        const gap  = targetPct - current
+        const step = Math.max(0.3, gap * 0.04)
+        return { ...prev, progress: Math.min(targetPct, current + step), currentStepIndex: stepIdx }
+      })
+    }, 400)
+  }
+
   const handleFilesUpload = async (files: File[]) => {
-    setLoading(true)
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current)
     setExtractError(null)
-    setLoadingStep(sq ? 'Duke ngarkuar dokumentet...' : 'Uploading documents...')
+    setLoading(true)
+
+    const fileStates: FileProcessState[] = files.map(f => ({
+      name: f.name, type: f.type, size: f.size, status: 'pending',
+    }))
+
+    // Step 0 → 1: Upload + format check (instant)
+    setProcState({
+      isProcessing: true, currentStepIndex: 0, progress: 10,
+      files: fileStates,
+    })
+    await new Promise(r => setTimeout(r, 300))
+    setProcState(prev => prev ? { ...prev, currentStepIndex: 1, progress: 20 } : prev)
+    await new Promise(r => setTimeout(r, 300))
+
+    // Step 2 → 3: Mark files as "reading", start slow progress toward 50%
+    setProcState(prev => prev ? {
+      ...prev,
+      currentStepIndex: 2, progress: 35,
+      files: fileStates.map(f => ({ ...f, status: 'reading' })),
+    } : prev)
+    advanceProgress(50, 3)  // crawl toward 50% (extracting text)
+
     try {
       const fd = new FormData()
       files.forEach(f => fd.append('files', f))
 
-      setLoadingStep(sq ? 'Duke lexuar dokumentet...' : 'Reading documents...')
+      // Advance to AI analysis phase while fetch runs
+      setTimeout(() => advanceProgress(72, 4), 3000)   // ~3s in: AI analysis
+      setTimeout(() => advanceProgress(86, 4), 30000)  // ~30s in: still AI
+
       const res  = await fetch('/api/extract', { method: 'POST', body: fd })
       const data = await res.json()
 
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current)
+
       if (!res.ok) throw new Error(data.error || 'Extraction failed')
 
-      setLoadingStep(sq ? 'Duke nxjerrë të dhënat...' : 'Extracting data...')
-      setHeader(data.header || {})
-      setItems(data.items || [])
-      setPositions(data.positions || [])
-      setMissingFields(data.missingFields || [])
-      setStep('review')
+      // Step 5 → 6: Creating tables & validating
+      setProcState(prev => prev ? { ...prev, currentStepIndex: 5, progress: 88 } : prev)
+      await new Promise(r => setTimeout(r, 400))
+      setProcState(prev => prev ? { ...prev, currentStepIndex: 6, progress: 95 } : prev)
+      await new Promise(r => setTimeout(r, 400))
+
+      const headerData   = data.header || {}
+      const itemsData    = data.items || []
+      const posData      = data.positions || []
+      const missingData  = data.missingFields || []
+
+      setHeader(headerData)
+      setItems(itemsData)
+      setPositions(posData)
+      setMissingFields(missingData)
+
+      const missingCnt = missingData.filter((m: { status: string }) => m.status === 'missing').length
+      const reviewCnt  = itemsData.filter((i: { status: string }) => i.status === 'review').length
+
+      // Step 7: Done
+      setProcState({
+        isProcessing: false, currentStepIndex: 7, progress: 100,
+        files: fileStates.map(f => ({ ...f, status: 'success' })),
+        success: {
+          items: itemsData.length,
+          positions: posData.length,
+          missing: missingCnt,
+          review: reviewCnt,
+        },
+      })
+
     } catch (err) {
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current)
       const technical = err instanceof Error ? err.message : String(err)
       console.error('[Upload] extraction failed:', technical)
-      setExtractError({
-        msg: lang === 'sq'
-          ? 'Dokumenti nuk mund të lexohej. Ju lutem provoni përsëri ose ngarkoni një format tjetër.'
-          : 'The document could not be read. Please try again or upload a different format.',
-        tech: technical,
-      })
+      setProcState(prev => ({
+        isProcessing: false, currentStepIndex: prev?.currentStepIndex || 2,
+        progress: prev?.progress || 35,
+        files: fileStates.map(f => ({ ...f, status: 'error' })),
+        error: {
+          sq: 'Dokumenti nuk mund të lexohej. Ju lutem provoni përsëri ose ngarkoni një format tjetër.',
+          en: 'The document could not be read. Please try again or upload a different format.',
+          technical,
+        },
+      }))
     } finally {
       setLoading(false)
       setLoadingStep('')
     }
+  }
+
+  const handleProcessingRetry = () => {
+    setProcState(null)
+    setExtractError(null)
+  }
+
+  const handleProcessingContinue = () => {
+    setProcState(null)
+    setStep('review')
   }
 
   const handleVoiceExtracted = (data: Partial<HeaderData>) => {
@@ -531,15 +620,27 @@ export default function Home() {
               {/* Camera modal trigger — handled by CameraCapture component */}
             </div>
 
-            {/* Upload zone (conditional) */}
-            {activeAction === 'upload' && (
+            {/* Upload zone (shown when not processing) */}
+            {activeAction === 'upload' && !procState && (
               <div className="a-slide-down" style={{ marginBottom: 20 }}>
                 <UploadZone lang={lang} onFiles={handleFilesUpload} loading={loading} loadingStep={loadingStep} />
               </div>
             )}
 
-            {/* ── Extraction Error Card (replaces alert()) ─────── */}
-            {extractError && (
+            {/* Processing card (replaces upload zone + alert during processing) */}
+            {procState && (
+              <div className="a-fade-in" style={{ marginBottom: 20 }}>
+                <ProcessingCard
+                  lang={lang}
+                  state={procState}
+                  onRetry={handleProcessingRetry}
+                  onContinue={handleProcessingContinue}
+                />
+              </div>
+            )}
+
+            {/* Legacy error card fallback */}
+            {extractError && !procState && (
               <div className="a-fade-in" style={{ marginBottom: 20 }}>
                 <ExtractErrorCard
                   lang={lang}
