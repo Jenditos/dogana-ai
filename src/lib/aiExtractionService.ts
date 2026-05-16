@@ -139,33 +139,41 @@ function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<Invo
 }
 
 /* ── Call OpenAI Chat Completions ────────────────────────────── */
-async function callOpenAI(
+// Returns raw text + truncation flag — callers decide how to handle
+async function callOpenAIRaw(
   apiKey: string,
   model: string,
   content: unknown[],
-  maxTokens = 4096
-): Promise<{ header: Partial<HeaderData>; items: Partial<InvoiceItem>[] }> {
+  maxTokens?: number   // undefined = model decides (no artificial cap)
+): Promise<{ raw: string; truncated: boolean }> {
+  const body: Record<string, unknown> = {
+    model,
+    messages: [{ role: 'user', content }],
+  }
+  if (maxTokens) body.max_completion_tokens = maxTokens
+
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'user', content }],
-      max_completion_tokens: maxTokens,
-    }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const errText = await res.text()
     console.error('[AI] callOpenAI error:', errText)
     throw new Error(`OpenAI API error: ${errText}`)
   }
-  const data = await res.json()
-  const raw  = data.choices?.[0]?.message?.content || ''
-  if (!raw) throw new Error('OpenAI returned empty response')
+  const data      = await res.json()
+  const raw       = data.choices?.[0]?.message?.content || ''
+  const truncated = data.choices?.[0]?.finish_reason === 'length'
 
+  if (truncated) console.warn(`[AI] Response truncated (finish_reason=length). Model: ${model}`)
+  return { raw, truncated }
+}
+
+function parseJSON(raw: string): { header: Partial<HeaderData>; items: Partial<InvoiceItem>[] } {
+  if (!raw) throw new Error('OpenAI returned empty response')
   const match = raw.match(/\{[\s\S]*\}/)
   if (!match) throw new Error(`AI did not return valid JSON. Response: ${raw.slice(0, 300)}`)
-
   try {
     return JSON.parse(match[0])
   } catch (e) {
@@ -210,8 +218,10 @@ async function deletePdfFile(apiKey: string, fileId: string): Promise<void> {
 
 /**
  * Extract from PDF files using OpenAI Files API.
- * PDFs are uploaded, referenced by file_id, then deleted.
- * gpt-4o-mini processes them natively (text + page images).
+ *
+ * Strategy: two parallel calls (header + items) to avoid JSON truncation
+ * on large invoices. No hardcoded token limit — model decides its own max.
+ * If the items call is still truncated, auto-chunks into batches of 50.
  */
 export async function extractWithPdf(
   pdfBase64s: string[],
@@ -223,37 +233,101 @@ export async function extractWithPdf(
 
   const fileIds: string[] = []
   try {
-    // Upload each PDF to Files API and get file_id
     for (let i = 0; i < pdfBase64s.length; i++) {
       const fileId = await uploadPdfFile(apiKey, pdfBase64s[i], `invoice_${i + 1}.pdf`)
       fileIds.push(fileId)
     }
 
-    const content: unknown[] = [
-      { type: 'text', text: EXTRACTION_PROMPT },
-      // Reference uploaded PDFs by file_id (OpenAI processes natively)
-      ...fileIds.map(fileId => ({
-        type: 'file',
-        file: { file_id: fileId },
-      })),
-      // Any additional images (JPG/PNG/WEBP)
+    // Shared file/image attachments for both calls
+    const attachments: unknown[] = [
+      ...fileIds.map(fileId => ({ type: 'file', file: { file_id: fileId } })),
       ...imageBase64s.map((b64, i) => ({
         type: 'image_url',
-        image_url: {
-          url: `data:${imageMimeTypes[i] || 'image/jpeg'};base64,${b64}`,
-          detail: 'high',
-        },
+        image_url: { url: `data:${imageMimeTypes[i] || 'image/jpeg'};base64,${b64}`, detail: 'high' },
       })),
     ]
 
-    const parsed = await callOpenAI(apiKey, 'gpt-4o-mini', content, 16000)
-    return { header: parsed.header || {}, items: buildItems(parsed), missingFields: [] }
+    // ── Call 1: header only (fast, never truncated) ──────────
+    const headerPrompt = `${EXTRACTION_PROMPT}
+
+IMPORTANT: Return ONLY the "header" object — no "items" array needed.
+Return JSON: { "header": { ... } }`
+
+    const { raw: headerRaw } = await callOpenAIRaw(apiKey, 'gpt-4o-mini', [
+      { type: 'text', text: headerPrompt },
+      ...attachments,
+    ])
+    const headerParsed = parseJSON(headerRaw)
+
+    // ── Call 2: items only (may be large for big invoices) ───
+    const itemsPrompt = `Extract ONLY the line items from this invoice. Return a JSON array.
+Return ONLY: { "items": [ { "itemNo":"", "descriptionEn":"", "qty":0, "unit":"", "unitPrice":0, "totalValue":0, "packages":0, "grossWeight":0, "netWeight":0, "volume":0 }, ... ] }
+Extract ALL items — do not skip any. Use 0 for missing numbers.`
+
+    const { raw: itemsRaw, truncated } = await callOpenAIRaw(apiKey, 'gpt-4o-mini', [
+      { type: 'text', text: itemsPrompt },
+      ...attachments,
+    ])
+
+    let itemsParsed: { items: Partial<InvoiceItem>[] } = { items: [] }
+    if (!truncated) {
+      itemsParsed = parseJSON(itemsRaw) as { items: Partial<InvoiceItem>[] }
+    } else {
+      // Truncated: extract in batches by item range
+      console.warn('[AI] Items truncated, chunking by range...')
+      itemsParsed = await extractItemsChunked(apiKey, attachments)
+    }
+
+    return {
+      header: headerParsed.header || {},
+      items:  buildItems({ header: headerParsed.header, items: itemsParsed.items || [] }),
+      missingFields: [],
+    }
   } finally {
-    // Always clean up uploaded files (privacy + storage)
     if (fileIds.length > 0) {
       await Promise.allSettled(fileIds.map(id => deletePdfFile(apiKey, id)))
     }
   }
+}
+
+/** Chunked item extraction for very large invoices (200+ items). */
+async function extractItemsChunked(
+  apiKey: string,
+  attachments: unknown[]
+): Promise<{ items: Partial<InvoiceItem>[] }> {
+  const BATCH = 50
+  let offset = 0
+  const allItems: Partial<InvoiceItem>[] = []
+
+  while (true) {
+    const prompt = `Extract line items ${offset + 1} to ${offset + BATCH} from this invoice.
+If there are fewer remaining items, return all remaining ones.
+Return ONLY: { "items": [...], "hasMore": true/false }
+Use 0 for missing numbers.`
+
+    const { raw, truncated } = await callOpenAIRaw(apiKey, 'gpt-4o-mini', [
+      { type: 'text', text: prompt },
+      ...attachments,
+    ])
+
+    if (truncated) {
+      console.warn(`[AI] Chunk offset=${offset} truncated, stopping`)
+      break
+    }
+
+    let parsed: { items?: Partial<InvoiceItem>[]; hasMore?: boolean }
+    try { parsed = parseJSON(raw) as typeof parsed } catch { break }
+
+    const chunk = parsed.items || []
+    if (chunk.length === 0) break
+    allItems.push(...chunk)
+
+    if (!parsed.hasMore || chunk.length < BATCH) break
+    offset += BATCH
+  }
+
+  console.log(`[AI] Chunked extraction complete: ${allItems.length} items`)
+  return { items: allItems }
 }
 
 /**
@@ -274,8 +348,22 @@ export async function extractWithAI(
     })),
   ]
 
-  const parsed = await callOpenAI(apiKey, 'gpt-4o-mini', content, 16000)
-  return { header: parsed.header || {}, items: buildItems(parsed), missingFields: [] }
+  // Same 2-call strategy for images: header + items separately
+  const headerContent: unknown[] = [
+    { type: 'text', text: `${EXTRACTION_PROMPT}\nIMPORTANT: Return ONLY { "header": { ... } }` },
+    ...base64Images.map(img => ({ type: 'image_url', image_url: { url: `data:${mimeType};base64,${img}`, detail: 'high' } })),
+  ]
+  const itemsContent: unknown[] = [
+    { type: 'text', text: 'Extract ONLY the line items. Return ONLY: { "items": [...] }. Use 0 for missing numbers.' },
+    ...base64Images.map(img => ({ type: 'image_url', image_url: { url: `data:${mimeType};base64,${img}`, detail: 'high' } })),
+  ]
+  const [{ raw: hRaw }, { raw: iRaw }] = await Promise.all([
+    callOpenAIRaw(apiKey, 'gpt-4o-mini', headerContent),
+    callOpenAIRaw(apiKey, 'gpt-4o-mini', itemsContent),
+  ])
+  const headerP = parseJSON(hRaw)
+  const itemsP  = parseJSON(iRaw)
+  return { header: headerP.header || {}, items: buildItems({ header: headerP.header, items: itemsP.items || [] }), missingFields: [] }
 }
 
 /**
@@ -285,18 +373,17 @@ export async function extractWithText(text: string): Promise<ExtractionResult> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY not configured')
 
-  const trimmed = text.slice(0, 14000)
+  // No token limit — gpt-5-mini decides its own max (up to 128k output)
+  const hPrompt = `${EXTRACTION_PROMPT}\nIMPORTANT: Return ONLY { "header": { ... } }\n\nText:\n---\n${text.slice(0, 14000)}\n---`
+  const iPrompt = `Extract ONLY the line items from this invoice text. Return ONLY: { "items": [...] }\n\nText:\n---\n${text.slice(0, 14000)}\n---`
 
-  const prompt = `${EXTRACTION_PROMPT}
-
-Document text to extract from:
----
-${trimmed}
----`
-
-  const content = [{ type: 'text', text: prompt }]
-  const parsed  = await callOpenAI(apiKey, 'gpt-5-mini', content, 16000)
-  return { header: parsed.header || {}, items: buildItems(parsed), missingFields: [] }
+  const [{ raw: hRaw }, { raw: iRaw }] = await Promise.all([
+    callOpenAIRaw(apiKey, 'gpt-5-mini', [{ type: 'text', text: hPrompt }]),
+    callOpenAIRaw(apiKey, 'gpt-5-mini', [{ type: 'text', text: iPrompt }]),
+  ])
+  const headerP = parseJSON(hRaw)
+  const itemsP  = parseJSON(iRaw)
+  return { header: headerP.header || {}, items: buildItems({ header: headerP.header, items: itemsP.items || [] }), missingFields: [] }
 }
 
 /**
@@ -313,7 +400,7 @@ Input: "${transcript}"
 Return JSON with this exact structure:
 {"header": {"importerName":"","exporterName":"","invoiceNumber":"","containerNumber":"","countryOfOrigin":"","incoterm":"","portOfLoading":"","portOfDischarge":"","totalInvoice":0,"currency":"","totalGrossWeight":0,"totalPackages":0}, "items":[]}`
 
-  const content = [{ type: 'text', text: prompt }]
-  const parsed  = await callOpenAI(apiKey, 'gpt-5-mini', content, 1024)
+  const { raw } = await callOpenAIRaw(apiKey, 'gpt-5-mini', [{ type: 'text', text: prompt }], 2048)
+  const parsed  = parseJSON(raw)
   return { header: parsed.header || {}, items: [], missingFields: [] }
 }
