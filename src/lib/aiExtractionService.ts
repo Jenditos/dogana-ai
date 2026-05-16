@@ -235,17 +235,32 @@ function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<Invo
   })
 }
 
+/* ── Model routing constants ────────────────────────────────────
+ *
+ * GPT-5.5 — used for ALL document extraction (PDF, images, vision)
+ *   Supports: Files API (PDF), image_url (JPG/PNG/WEBP), multi-page
+ *   Reason: superior table recognition, multi-column invoices, mixed content
+ *
+ * GPT-5-mini — used ONLY for text-in/text-out tasks (voice, text fallback)
+ *   No vision. Cheaper. Sufficient for plain-text prompts.
+ *
+ * Validation (sums, dates, tariff checks) is ALWAYS done in code, never by AI.
+ * ─────────────────────────────────────────────────────────────── */
+const MODEL_EXTRACTION = 'gpt-5.5'    // PDF + image extraction
+const MODEL_TEXT       = 'gpt-5-mini' // voice / text-only
+
 /* ── Call OpenAI Chat Completions ────────────────────────────── */
-// Returns raw text + truncation flag — callers decide how to handle
 async function callOpenAIRaw(
   apiKey: string,
   model: string,
   content: unknown[],
-  maxTokens?: number   // undefined = model decides (no artificial cap)
+  maxTokens?: number
 ): Promise<{ raw: string; truncated: boolean }> {
   const body: Record<string, unknown> = {
     model,
     messages: [{ role: 'user', content }],
+    // Force JSON output for extraction models — prevents extra prose
+    response_format: { type: 'json_object' },
   }
   if (maxTokens) body.max_completion_tokens = maxTokens
 
@@ -345,7 +360,7 @@ export async function extractWithPdf(
     ]
 
     // ── Call 1: header only (fast, never truncated) ──────────
-    const { raw: headerRaw } = await callOpenAIRaw(apiKey, 'gpt-4o-mini', [
+    const { raw: headerRaw } = await callOpenAIRaw(apiKey, MODEL_EXTRACTION, [
       { type: 'text', text: HEADER_PROMPT },
       ...attachments,
     ])
@@ -359,7 +374,7 @@ export async function extractWithPdf(
     // ITEMS_PROMPT explicitly tells GPT to look at ALL pages,
     // find BOTH the Invoice and Packing List tables,
     // and merge them by Item No. to get packages/weight/volume.
-    const { raw: itemsRaw, truncated } = await callOpenAIRaw(apiKey, 'gpt-4o-mini', [
+    const { raw: itemsRaw, truncated } = await callOpenAIRaw(apiKey, MODEL_EXTRACTION, [
       { type: 'text', text: ITEMS_PROMPT },
       ...attachments,
     ])
@@ -398,7 +413,7 @@ ${(itemsParsed.items || []).map(i => i.itemNo).filter(Boolean).join(', ')}
 
 Return ONLY the missing items: { "items": [ { "itemNo":"", "descriptionEn":"", "qty":0, "unit":"", "unitPrice":0, "totalValue":0, "packages":0, "grossWeight":0, "netWeight":0, "volume":0 } ] }`
 
-      const { raw: recoveryRaw } = await callOpenAIRaw(apiKey, 'gpt-4o-mini', [
+      const { raw: recoveryRaw } = await callOpenAIRaw(apiKey, MODEL_EXTRACTION, [
         { type: 'text', text: recoveryPrompt },
         ...attachments,
       ])
@@ -440,7 +455,7 @@ If there are fewer remaining items, return all remaining ones.
 Return ONLY: { "items": [...], "hasMore": true/false }
 Use 0 for missing numbers.`
 
-    const { raw, truncated } = await callOpenAIRaw(apiKey, 'gpt-4o-mini', [
+    const { raw, truncated } = await callOpenAIRaw(apiKey, MODEL_EXTRACTION, [
       { type: 'text', text: prompt },
       ...attachments,
     ])
@@ -493,8 +508,8 @@ export async function extractWithAI(
     ...base64Images.map(img => ({ type: 'image_url', image_url: { url: `data:${mimeType};base64,${img}`, detail: 'high' } })),
   ]
   const [{ raw: hRaw }, { raw: iRaw }] = await Promise.all([
-    callOpenAIRaw(apiKey, 'gpt-4o-mini', headerContent),
-    callOpenAIRaw(apiKey, 'gpt-4o-mini', itemsContent),
+    callOpenAIRaw(apiKey, MODEL_EXTRACTION, headerContent),
+    callOpenAIRaw(apiKey, MODEL_EXTRACTION, itemsContent),
   ])
   const headerP = parseJSON(hRaw)
   const itemsP  = parseJSON(iRaw)
@@ -513,8 +528,8 @@ export async function extractWithText(text: string): Promise<ExtractionResult> {
   const iPrompt = `Extract ONLY the line items from this invoice text. Return ONLY: { "items": [...] }\n\nText:\n---\n${text.slice(0, 14000)}\n---`
 
   const [{ raw: hRaw }, { raw: iRaw }] = await Promise.all([
-    callOpenAIRaw(apiKey, 'gpt-5-mini', [{ type: 'text', text: hPrompt }]),
-    callOpenAIRaw(apiKey, 'gpt-5-mini', [{ type: 'text', text: iPrompt }]),
+    callOpenAIRaw(apiKey, MODEL_TEXT, [{ type: 'text', text: hPrompt }]),
+    callOpenAIRaw(apiKey, MODEL_TEXT, [{ type: 'text', text: iPrompt }]),
   ])
   const headerP = parseJSON(hRaw)
   const itemsP  = parseJSON(iRaw)
@@ -535,7 +550,7 @@ Input: "${transcript}"
 Return JSON with this exact structure:
 {"header": {"importerName":"","exporterName":"","invoiceNumber":"","containerNumber":"","countryOfOrigin":"","incoterm":"","portOfLoading":"","portOfDischarge":"","totalInvoice":0,"currency":"","totalGrossWeight":0,"totalPackages":0}, "items":[]}`
 
-  const { raw } = await callOpenAIRaw(apiKey, 'gpt-5-mini', [{ type: 'text', text: prompt }], 2048)
+  const { raw } = await callOpenAIRaw(apiKey, MODEL_TEXT, [{ type: 'text', text: prompt }], 2048)
   const parsed  = parseJSON(raw)
   return { header: parsed.header || {}, items: [], missingFields: [] }
 }
