@@ -48,7 +48,34 @@ export function translateToAlbanian(descriptionEn: string): string {
   for (const key of sorted) {
     if (upper.includes(key)) return ALB[key]
   }
+  // If still unmatched, return cleaned-up original (better than empty)
   return upper
+}
+
+// Additional translations for common non-English invoice languages
+const ALB_EXTRA: Record<string, string> = {
+  // Serbian/Croatian/Bosnian
+  'T.PAPIR': 'LETER TUALETI', 'TOALETNI PAPIR': 'LETER TUALETI',
+  'UBRUS': 'PECETE LETRE', 'SALVETE': 'PECETE LETRE',
+  'MARAMICE': 'SHAMICE LETRE', 'PAPIRNI': 'LETER',
+  // German
+  'TOILETTENPAPIER': 'LETER TUALETI', 'SERVIETTEN': 'PECETE LETRE',
+  'KÜCHENROLLE': 'PESHQIRE LETRE', 'KUCHENROLLE': 'PESHQIRE LETRE',
+  // Turkish
+  'TUVALET KAGIDI': 'LETER TUALETI', 'KAGIT HAVLU': 'PESHQIRE LETRE',
+  // Italian
+  'CARTA IGIENICA': 'LETER TUALETI', 'TOVAGLIOLI': 'PECETE LETRE',
+  // Add more as needed
+}
+
+export function translateToAlbanianFull(description: string): string {
+  const upper = description.toUpperCase()
+  // Try extra translations first (more specific)
+  const extraKeys = Object.keys(ALB_EXTRA).sort((a, b) => b.length - a.length)
+  for (const key of extraKeys) {
+    if (upper.includes(key)) return ALB_EXTRA[key]
+  }
+  return translateToAlbanian(description)
 }
 
 /* ── Shared header-only extraction prompt ────────────────────── */
@@ -85,54 +112,83 @@ FIELD MAPPING:
 Return ONLY: { "header": { ... } }`
 
 /* ── Items extraction prompt — Invoice + Packing List merge ─── */
-// This prompt explicitly handles the common case where a PDF contains BOTH:
-// - A Commercial Invoice table (prices, values, quantities)
-// - A Packing List table (packages/cartons, gross weight, volume)
-// The two tables share Item Numbers as the merge key.
-const ITEMS_PROMPT = `You are an expert customs document data extractor.
+const ITEMS_PROMPT = `You are an expert customs document data extractor and HS tariff classifier.
 
-CRITICAL: This document may contain MULTIPLE tables spread across multiple pages:
-1. A COMMERCIAL INVOICE table — has: Item No., Description, Quantity, Unit Price, Total Value
-2. A PACKING LIST table — has: Item No., Description, QTY, Package/CTN, G.W., MEAS./CBM
+STEP 1 — LANGUAGE DETECTION
+The document may be in ANY language (English, Chinese, Serbian, German, Turkish, Albanian, Italian, etc.).
+Detect the language automatically. Translate ALL product descriptions to English for the "descriptionEn" field.
+Examples:
+  Serbian "Toaletni papir" → English "Toilet paper"
+  Serbian "Ubrus" → English "Paper napkins"
+  Chinese "卫生纸" → English "Toilet paper"
+  German "Toilettenpapier" → English "Toilet paper"
 
-These tables SHARE the same Item Numbers (e.g. F2-1--5, F3-1, F3-2,-4).
-You MUST look at ALL pages, find BOTH tables, and MERGE their data by Item No.
+STEP 2 — FIND INVOICE AND PACKING LIST
+The document may contain:
+1. A COMMERCIAL INVOICE — has: Item No., Description, Quantity, Unit Price, Total Value
+2. A PACKING LIST — has: Item No., Description, QTY, Package/CTN, G.W., MEAS./CBM
+Look at ALL pages. Merge them by Item No. when both exist.
 
-COLUMN ALIASES (all mean the same):
-- Packages/Cartons: PACKAGE, PACKAGES, CTN, CARTON, CARTONS, NO. OF CARTONS, PAKO, PKG, NO.OF CTN
-- Gross Weight: G.W, GW, G.W.(KGS), GROSS WEIGHT, BRUTO, WEIGHT, KG
-- Volume/Measurement: MEAS., MEAS, MEASUREMENT, CBM, M3, M³, VOLUME, VOLUMI, CB.M
-- Quantity: QTY, QUANTITY, SASIA, PCS, SET, PRS, PIECES, UNITS
-- Item Number: ITEM NO., ITEM NO, MARK, NO., REF
+COLUMN ALIASES:
+- Packages/Cartons: PACKAGE, CTN, CARTON, PAKO, KOM, KOM., Kol.
+- Gross Weight: G.W, GW, BRUTO, WEIGHT, KG, Težina bruto
+- Volume: MEAS., CBM, M3, VOLUMI
+- Quantity: QTY, QUANTITY, Količina, SASIA, PCS, SET, KOM
 
-MERGE PROCEDURE:
-Step 1 — Find the Packing List (look on EVERY page — it often starts on page 2 or 3)
-Step 2 — Find the Commercial Invoice
-Step 3 — For EACH item, combine data from both:
-  - itemNo, descriptionEn, qty, unit, unitPrice, totalValue → from Commercial Invoice
-  - packages, grossWeight, netWeight, volume → from Packing List (match by Item No.)
+STEP 3 — ASSIGN HS TARIFF CODE (this is critical)
+For EACH item, you MUST suggest the best matching HS tariff code based on what the product actually is.
+Use your knowledge of the Harmonized System (HS) nomenclature.
 
-EXAMPLE OF CORRECT MERGE:
-Invoice:      F2-1--5 | CAR AROMATHERAPY PAPER TABLET | 15600 PCS | €0.11 | €1716.00
-Packing List: F2-1--5 | CAR AROMATHERAPY PAPER TABLET | 15600 | 13 CTN | 221 KG | 0.91 CBM
-Merged result: { itemNo:"F2-1--5", descriptionEn:"CAR AROMATHERAPY PAPER TABLET", qty:15600, unit:"PCS", unitPrice:0.11, totalValue:1716.00, packages:13, grossWeight:221, netWeight:221, volume:0.91 }
+TARIFF CODE RULES:
+- Return the 10-digit TARIK code as a string (e.g. "4818100000")
+- If very confident → set tariffCodeConfidence: "high"
+- If somewhat confident → set tariffCodeConfidence: "medium"
+- If unsure → set tariffCodeConfidence: "low" but still suggest the closest code
+- NEVER leave tariffCode empty if you can identify what the product is
+- NEVER use "0000000000"
 
-Another example:
-Invoice:      F3-2,-4 | CERAMIC PLATE | 216 PCS | €0.86 | €185.76
-Packing List: F3-2,-4 | CERAMIC PLATE | 216 | 6 CTN | 125.7 KG | 0.20 CBM
-Merged result: { itemNo:"F3-2,-4", descriptionEn:"CERAMIC PLATE", qty:216, unit:"PCS", unitPrice:0.86, totalValue:185.76, packages:6, grossWeight:125.7, netWeight:125.7, volume:0.20 }
+COMMON CODES by product type (use as reference):
+Toilet paper → 4818100000 (CD 10%, VAT 18%)
+Paper napkins / tissue / ubrus → 4818201000 (CD 10%, VAT 18%)
+Paper serviettes / salvete → 4818300000 (CD 10%, VAT 18%)
+Paper towels → 4818209100 (CD 10%, VAT 18%)
+Ceramic tableware → 6912002900 (CD 10%, VAT 18%)
+Glass cups → 7013289000 (CD 10%, VAT 18%)
+Charger/adapter → 8504408390 (CD 10%, VAT 18%)
+USB cable → 8544429000 (CD 10%, VAT 18%)
+Bluetooth headset → 8518300020 (CD 10%, VAT 18%)
+Clothing → 6211000000 (CD 10%, VAT 18%)
+Bags/backpacks → 4202911000 (CD 10%, VAT 18%)
+Toys → 9503007900 (CD 10%, VAT 18%)
 
-STRICT DATA INTEGRITY RULES — read carefully:
-1. DO NOT invent or estimate weights/packages. If an item has no matching Packing List row, use packages=0, grossWeight=0, volume=0. Do NOT guess.
-2. DO NOT leave packages=0 if the Packing List clearly has data for that item.
-3. DO NOT count any item twice in packages or weight.
-4. Items with very low value or 1 PCS (like HEATER PEN 1 PCS €33.56) MUST be included — do not skip them.
-5. The LAST 2-3 pages often contain: small misc items, HEATER PEN, MACHINE, CLOTHES SAMPLES — read every page to the very end.
-6. If a Packing List row covers multiple items (e.g. "F3-1,F3-2"), assign data to each matching item individually.
-7. Extract ALL items — no skipping. A common error is missing the last 3-5 items on the last page.
-8. COMPLETENESS CHECK: Before returning, count your extracted items and verify sum(totalValue) ≈ invoice total. If items are missing, look again at the last pages.
+STEP 4 — MERGE PROCEDURE
+- itemNo, descriptionEn (translated!), qty, unit, unitPrice, totalValue → from Invoice
+- packages, grossWeight, netWeight, volume → from Packing List (0 if no Packing List found)
 
-Return ONLY: { "items": [ { "itemNo":"", "descriptionEn":"", "qty":0, "unit":"", "unitPrice":0, "totalValue":0, "packages":0, "grossWeight":0, "netWeight":0, "volume":0 }, ... ] }
+STRICT RULES:
+1. DO NOT invent weights/packages if no Packing List exists — use 0
+2. DO NOT skip any item — check last pages for small/misc items
+3. ALWAYS translate descriptions to English
+4. ALWAYS suggest a tariff code with confidence level
+5. COMPLETENESS: verify sum(totalValue) ≈ invoice total before returning
+
+Return ONLY this JSON structure:
+{ "items": [ {
+  "itemNo": "",
+  "descriptionEn": "",
+  "qty": 0,
+  "unit": "",
+  "unitPrice": 0,
+  "totalValue": 0,
+  "packages": 0,
+  "grossWeight": 0,
+  "netWeight": 0,
+  "volume": 0,
+  "tariffCode": "",
+  "tariffCodeConfidence": "high|medium|low",
+  "cdRate": 10,
+  "vatRate": 18
+} ] }
 
 No extra text. No markdown. Pure JSON.`
 
@@ -182,15 +238,14 @@ function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<Invo
   return (parsed.items || []).map((item, idx) => {
     const desc = item.descriptionEn || ''
 
-    // ── Priority 1: previously confirmed code (user-validated) ──
-    // getConfirmedCode only works client-side; returns null on server
+    // ── Priority 1: previously confirmed code by user ──
     const confirmed = typeof window !== 'undefined' ? getConfirmedCode(desc) : null
     if (confirmed) {
       return {
         id: `item_${idx + 1}`,
         itemNo:        item.itemNo || String(idx + 1),
         descriptionEn: desc,
-        descriptionSq: translateToAlbanian(desc),
+        descriptionSq: translateToAlbanianFull(desc),
         qty:         Number(item.qty)         || 0,
         unit:        item.unit               || 'PCS',
         unitPrice:   Number(item.unitPrice)   || 0,
@@ -207,14 +262,39 @@ function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<Invo
       }
     }
 
-    // ── Priority 2: auto-matched from keyword table ──
+    // ── Priority 2: keyword-based rule match ──
     const tariffRule = findTariffByKeyword(desc, rules)
+
+    // ── Priority 3: AI-suggested code from prompt (gpt-5.5 classified it) ──
+    // The AI returns tariffCode + tariffCodeConfidence when it recognizes the product,
+    // even if the description is in a foreign language (Serbian, Chinese, etc.)
+    const aiCode    = sanitizeTariffCode((item as { tariffCode?: string }).tariffCode || '')
+    const aiCdRate  = Number((item as { cdRate?: number }).cdRate) || 10
+    const aiVatRate = Number((item as { vatRate?: number }).vatRate) || 18
+    const aiConf    = (item as { tariffCodeConfidence?: string }).tariffCodeConfidence || ''
+
+    // Determine best code: keyword rule > AI suggestion > empty
+    const finalCode = sanitizeTariffCode(tariffRule?.tariffCode || '') || aiCode
+    const finalCd   = tariffRule?.customsRate ?? (aiCode ? aiCdRate : 10)
+    const finalVat  = tariffRule?.vatRate     ?? (aiCode ? aiVatRate : 18)
+
+    // Status logic:
+    // 'confirmed' — user confirmed (handled above)
+    // 'review'    — code found (keyword OR ai), needs user confirmation
+    // 'missing'   — no code anywhere, must be manually added
+    const hasCode = !!finalCode
+    const status  = hasCode ? 'review' : 'missing'
+
+    // Log when AI classifier provided the code (no keyword match)
+    if (!tariffRule && aiCode) {
+      console.log(`[buildItems] AI-classified "${desc}" → ${aiCode} (confidence: ${aiConf})`)
+    }
 
     return {
       id: `item_${idx + 1}`,
       itemNo:        item.itemNo || String(idx + 1),
       descriptionEn: desc,
-      descriptionSq: translateToAlbanian(desc),
+      descriptionSq: translateToAlbanianFull(desc),
       qty:         Number(item.qty)         || 0,
       unit:        item.unit               || 'PCS',
       unitPrice:   Number(item.unitPrice)   || 0,
@@ -223,14 +303,12 @@ function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<Invo
       grossWeight: Number(item.grossWeight) || 0,
       netWeight:   Number(item.netWeight)   || 0,
       volume:      Number(item.volume)      || 0,
-      tariffCode:  sanitizeTariffCode(tariffRule?.tariffCode || ''),
-      customsRate: tariffRule?.customsRate  ?? 10,
-      vatRate:     tariffRule?.vatRate      ?? 18,
+      tariffCode:  finalCode,
+      customsRate: finalCd,
+      vatRate:     finalVat,
       requiresMaterial: tariffRule?.requiresMaterial,
       materialNote:     tariffRule?.materialNote,
-      // 'review' = auto-suggested, must be reviewed by user
-      // 'missing' = no code found at all, blocks final export
-      status: tariffRule ? 'review' : 'missing',
+      status,
     }
   })
 }

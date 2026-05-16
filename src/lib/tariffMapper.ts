@@ -134,6 +134,31 @@ export const DEFAULT_TARIFF_RULES: TariffRule[] = [
   // ── LASER / MACHINES ──────────────────────────────────────────────────────
   { id: '81', keyword: 'LASER MACHINE',        descriptionEn: 'Laser engraving / cutting machine',        descriptionSq: 'MAKINE LAZER GRAVIMI / PRERJE',                 tariffCode: '8456109000', customsRate: 10, vatRate: 18, notes: 'TARIK 8456 10 90 — Makinerite me lazer, te tjera' },
   { id: '82', keyword: 'HEATER PEN',           descriptionEn: 'Heat pen / wood burning pen',              descriptionSq: 'STILOLAPS NGROHES / PIROGRAFI',                  tariffCode: '8516800000', customsRate: 10, vatRate: 18, notes: 'TARIK 8516 80 — Rezistancat ngrohese, tjera' },
+
+  // ── MULTILINGUAL KEYWORDS — Serbian / Croatian / Bosnian / Turkish / German ──
+  // These ensure correct tariff codes even when invoice language is not English.
+  // Paper hygiene products (Serbisch: T.papir, Ubrus, Salvete)
+  { id: '83', keyword: 'T.PAPIR',              descriptionEn: 'Toilet paper',                             descriptionSq: 'LETER TUALETI',                                 tariffCode: '4818100000', customsRate: 10, vatRate: 18, notes: 'SR: toaletni papir' },
+  { id: '84', keyword: 'TOALETNI PAPIR',       descriptionEn: 'Toilet paper',                             descriptionSq: 'LETER TUALETI',                                 tariffCode: '4818100000', customsRate: 10, vatRate: 18, notes: 'SR: toaletni papir' },
+  { id: '85', keyword: 'SALVETE',              descriptionEn: 'Paper serviettes / napkins',               descriptionSq: 'PECETE LETRE',                                  tariffCode: '4818300000', customsRate: 10, vatRate: 18, notes: 'SR: salvete (papirne)' },
+  { id: '86', keyword: 'UBRUS',                descriptionEn: 'Paper napkins / wipes',                    descriptionSq: 'PECETE LETRE / SHAL LETRE',                     tariffCode: '4818201000', customsRate: 10, vatRate: 18, notes: 'SR: ubrus (papirni)' },
+  { id: '87', keyword: 'MARAMICE',             descriptionEn: 'Facial tissues / handkerchiefs',           descriptionSq: 'SHAMICE LETRE',                                 tariffCode: '4818201000', customsRate: 10, vatRate: 18, notes: 'SR: papirne maramice' },
+  { id: '88', keyword: 'PAPIRNI UBRUS',        descriptionEn: 'Paper towels',                             descriptionSq: 'PESHQIRE LETRE',                                tariffCode: '4818209100', customsRate: 10, vatRate: 18, notes: 'SR: papirni ubrus kuhinjski' },
+  // German
+  { id: '89', keyword: 'TOILETTENPAPIER',      descriptionEn: 'Toilet paper',                             descriptionSq: 'LETER TUALETI',                                 tariffCode: '4818100000', customsRate: 10, vatRate: 18, notes: 'DE: Toilettenpapier' },
+  { id: '90', keyword: 'KUCHENROLLE',          descriptionEn: 'Kitchen paper towels',                     descriptionSq: 'PESHQIRE LETRE KUZHINE',                        tariffCode: '4818209100', customsRate: 10, vatRate: 18, notes: 'DE: Küchenrolle' },
+  { id: '91', keyword: 'SERVIETTEN',           descriptionEn: 'Paper serviettes',                         descriptionSq: 'PECETE LETRE',                                  tariffCode: '4818300000', customsRate: 10, vatRate: 18, notes: 'DE: Papierservietten' },
+  // Turkish
+  { id: '92', keyword: 'TUVALET KAGIDI',       descriptionEn: 'Toilet paper',                             descriptionSq: 'LETER TUALETI',                                 tariffCode: '4818100000', customsRate: 10, vatRate: 18, notes: 'TR: tuvalet kağıdı' },
+  { id: '93', keyword: 'KAGIT HAVLU',          descriptionEn: 'Paper towels',                             descriptionSq: 'PESHQIRE LETRE',                                tariffCode: '4818209100', customsRate: 10, vatRate: 18, notes: 'TR: kağıt havlu' },
+  // Italian
+  { id: '94', keyword: 'CARTA IGIENICA',       descriptionEn: 'Toilet paper',                             descriptionSq: 'LETER TUALETI',                                 tariffCode: '4818100000', customsRate: 10, vatRate: 18, notes: 'IT: carta igienica' },
+  { id: '95', keyword: 'TOVAGLIOLI',           descriptionEn: 'Paper napkins',                            descriptionSq: 'PECETE LETRE',                                  tariffCode: '4818300000', customsRate: 10, vatRate: 18, notes: 'IT: tovaglioli carta' },
+  // Chinese product categories (transliterated common terms)
+  { id: '96', keyword: 'PORCELAIN',            descriptionEn: 'Porcelain tableware',                      descriptionSq: 'ENE PORCELANI',                                 tariffCode: '6911100000', customsRate: 10, vatRate: 18, notes: 'Porcelain / china tableware' },
+  { id: '97', keyword: 'STAINLESS STEEL',      descriptionEn: 'Stainless steel kitchenware',              descriptionSq: 'ENE KUZHINE CELIK',                             tariffCode: '7323930000', customsRate: 10, vatRate: 18, notes: 'Stainless steel kitchen items' },
+  { id: '98', keyword: 'EXTENSION CORD',       descriptionEn: 'Electrical extension cord',                descriptionSq: 'ZGJATUES ELEKTRIK',                             tariffCode: '8544429000', customsRate: 10, vatRate: 18, notes: 'Extension cord / power strip cable' },
+  { id: '99', keyword: 'POWER STRIP',          descriptionEn: 'Power strip / extension socket',           descriptionSq: 'PLLAKE ELEKTRIKE ME PRIZA',                     tariffCode: '8536690000', customsRate: 10, vatRate: 18, notes: 'Power strip / multi-socket' },
 ]
 
 export function findTariffByKeyword(description: string, rules?: TariffRule[]): TariffRule | null {
