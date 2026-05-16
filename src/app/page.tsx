@@ -697,192 +697,119 @@ export default function Home() {
         {step === 'review' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }} className="a-fade-up">
 
-            {/* ══ A+B+C: STAT CARDS + LEGEND + WARNING BOX ══════════ */}
+            {/* ══ STATUS AREA — P1 always visible, clean ═══════════ */}
             {items.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} className="a-fade-in">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} className="a-fade-in">
 
-                {/* ── 4 Large Status Cards ── */}
-                <div className="stat-cards-grid" style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(4, 1fr)',
-                  gap: 14,
-                }}>
-                  {/* Card 1 — Blue */}
-                  <StatCard value={items.length}     label={sq ? 'RRESHTA FATURE'      : 'INVOICE ROWS'}         subtitle={sq ? 'nga dokumenti'              : 'from document'}             color="blue" />
-                  {/* Card 2 — Green */}
-                  <StatCard value={positions.length} label={sq ? 'POZICIONE ASYCUDA'   : 'ASYCUDA POSITIONS'}    subtitle={sq ? 'grupe sipas kodit tarifor'   : 'grouped by tariff code'}     color="green" />
-                  {/* Card 3 — Red or green */}
-                  <StatCard value={missingRowCount}  label={sq ? 'RRESHTA ME MUNGESA'  : 'ROWS WITH MISSING'}    subtitle={sq ? 'plotëso para eksportit'      : 'fill before export'}          color={missingRowCount > 0 ? 'red' : 'green'} />
-                  {/* Card 4 — Amber or green */}
-                  <StatCard value={reviewCount}      label={sq ? 'KODE PËR KONTROLL'   : 'CODES TO REVIEW'}      subtitle={sq ? 'propozuar, duhet konfirmuar' : 'proposed, needs confirm'}     color={reviewCount > 0 ? 'amber' : 'green'} />
+                {/* ── 4 stat cards ── */}
+                <div className="stat-cards-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12 }}>
+                  <StatCard value={items.length}     label={sq ? 'RRESHTA FATURE'     : 'INVOICE ROWS'}      color="blue" />
+                  <StatCard value={positions.length} label={sq ? 'POZICIONE ASYCUDA'  : 'ASYCUDA POSITIONS'} color="green" />
+                  <StatCard value={missingRowCount}  label={sq ? 'RRESHTA ME MUNGESA' : 'ROWS WITH MISSING'} color={missingRowCount > 0 ? 'red' : 'green'} />
+                  <StatCard value={reviewCount}      label={sq ? 'KODE PËR KONTROLL'  : 'CODES TO REVIEW'}   color={reviewCount > 0 ? 'amber' : 'green'} />
                 </div>
 
-                {/* ── Color legend ── */}
-                <div style={{
-                  display: 'flex', gap: 20, flexWrap: 'wrap',
-                  padding: '10px 16px', borderRadius: 12,
-                  background: 'var(--surface)', border: '1px solid var(--border)',
-                  boxShadow: 'var(--sh-xs)',
-                }}>
-                  {[
-                    { color: 'var(--red)',   sq: 'E kuqe — plotëso para se të vazhdosh.',    en: 'Red — fill before continuing.' },
-                    { color: 'var(--amber)', sq: 'Portokalli — kontrollo dhe konfirmo.',      en: 'Orange — check and confirm.' },
-                    { color: 'var(--green)', sq: 'Gjelbër — gati.',                          en: 'Green — ready.' },
-                  ].map(({ color, sq: sqTxt, en: enTxt }) => (
-                    <span key={color} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--t3)' }}>
-                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                      {sq ? sqTxt : enTxt}
-                    </span>
-                  ))}
-                </div>
-
-                {/* ── Warning / status box ── */}
+                {/* ── One compact status bar (blocking errors OR success) ── */}
                 {missingRowCount > 0 ? (
                   <div style={{
-                    background: 'var(--red-bg)', border: '1.5px solid var(--red-bdr)',
-                    borderRadius: 16, padding: '18px 22px',
-                    display: 'flex', alignItems: 'flex-start', gap: 14,
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10,
+                    padding: '12px 16px', borderRadius: 12,
+                    background: 'var(--red-bg)', border: '1px solid var(--red-bdr)',
                   }}>
-                    <div style={{
-                      width: 40, height: 40, borderRadius: '50%',
-                      background: 'rgba(220,38,38,.15)', color: 'var(--red)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                    }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <IcoAlert />
-                    </div>
-                    <div>
-                      <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800, color: 'var(--red)' }}>
-                        {sq ? 'Nuk mund të vazhdosh ende' : 'Cannot continue yet'}
-                      </p>
-                      <p style={{ margin: '0 0 12px', fontSize: 13.5, color: 'rgba(220,38,38,.85)' }}>
-                        {sq
-                          ? `Janë gjetur ${missingFieldCount} fusha që mungojnë në ${missingRowCount} rreshta.`
-                          : `Found ${missingFieldCount} missing fields in ${missingRowCount} rows.`}
-                      </p>
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        {missingByType.tariffCode > 0  && <span style={{ padding:'4px 12px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:13, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.tariffCode} {sq?'kode tarifore':'tariff codes'}</span>}
-                        {missingByType.grossWeight > 0 && <span style={{ padding:'4px 12px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:13, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.grossWeight} {sq?'pesha bruto':'gross weights'}</span>}
-                        {missingByType.qty > 0         && <span style={{ padding:'4px 12px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:13, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.qty} {sq?'sasi':'quantities'}</span>}
-                        {missingByType.header > 0      && <span style={{ padding:'4px 12px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:13, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.header} {sq?'të dhëna dokumenti':'document fields'}</span>}
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--red)' }}>
+                        {sq ? `${missingRowCount} rreshta me mungesa` : `${missingRowCount} rows with missing data`}
+                      </span>
+                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                        {missingByType.tariffCode > 0  && <span style={{ padding:'2px 8px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.tariffCode} {sq?'kode':'codes'}</span>}
+                        {missingByType.grossWeight > 0 && <span style={{ padding:'2px 8px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.grossWeight} {sq?'pesha':'weights'}</span>}
+                        {missingByType.qty > 0         && <span style={{ padding:'2px 8px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.qty} {sq?'sasi':'qty'}</span>}
+                        {missingByType.header > 0      && <span style={{ padding:'2px 8px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.header} {sq?'dok.':'doc.'}</span>}
                       </div>
                     </div>
                   </div>
                 ) : (
                   <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '10px 16px', borderRadius: 12,
                     background: 'var(--green-bg)', border: '1px solid var(--green-bdr)',
-                    borderRadius: 16, padding: '16px 22px',
-                    display: 'flex', alignItems: 'center', gap: 12,
                   }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                    <div>
-                      <p style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 800, color: 'var(--green)' }}>
-                        {sq ? 'Gati për hapin tjetër' : 'Ready for the next step'}
-                      </p>
-                      <p style={{ margin: 0, fontSize: 12.5, color: 'var(--green)' }}>
-                        {sq ? 'Të gjitha fushat e detyrueshme janë plotësuar.' : 'All mandatory fields have been filled.'}
-                      </p>
-                    </div>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>
+                      {sq ? 'Të gjitha fushat e detyrueshme janë plotësuar.' : 'All mandatory fields are filled.'}
+                    </span>
                   </div>
                 )}
+
+                {/* ── Diff notice — ONE compact line only when relevant ── */}
+                {(weightDiff || pkgDiff) && (() => {
+                  const noPL = sumWeight === 0 && sumPkgs === 0
+                  if (noPL) return (
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, padding:'9px 14px', borderRadius:10, background:'var(--amber-bg)', border:'1px solid var(--amber-bdr)', flexWrap:'wrap' }}>
+                      <span style={{ fontSize:12.5, color:'var(--amber)', fontWeight:600 }}>
+                        {sq ? 'Nuk ka Packing List — Pesha dhe Paketime nuk janë nga dokumenti' : 'No Packing List — Weight and Packages not from document'}
+                      </span>
+                      <button onClick={() => setHeader(h => ({ ...h, totalGrossWeight: 0, totalPackages: 0 }))} style={{ padding:'4px 12px', borderRadius:7, border:'1px solid var(--amber-bdr)', background:'var(--surface)', color:'var(--amber)', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                        {sq ? 'Vendos 0 të dyja' : 'Set both to 0'}
+                      </button>
+                    </div>
+                  )
+                  return (
+                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      {weightDiff && header.totalGrossWeight && (
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'8px 14px', borderRadius:9, background:'var(--surface-2)', border:'1px solid var(--amber-bdr)', flexWrap:'wrap' }}>
+                          <span style={{ fontSize:12.5, color:'var(--t2)' }}>{sq?'Pesha':'Weight'}: <strong>{header.totalGrossWeight}</strong> → {sumWeight.toFixed(2)} <span style={{color:'var(--amber)'}}>(Δ{Math.abs((header.totalGrossWeight||0)-sumWeight).toFixed(2)}kg)</span></span>
+                          <div style={{ display:'flex', gap:5 }}>
+                            <button onClick={() => setHeader(h => ({...h, totalGrossWeight: parseFloat(sumWeight.toFixed(2))}))} style={{ padding:'3px 9px', borderRadius:6, border:'1px solid var(--amber-bdr)', background:'var(--amber-bg)', color:'var(--amber)', fontSize:11.5, fontWeight:700, cursor:'pointer' }}>{sumWeight.toFixed(2)}</button>
+                            <button onClick={() => setHeader(h => ({...h, totalGrossWeight: 0}))} style={{ padding:'3px 8px', borderRadius:6, border:'1px solid var(--border)', background:'transparent', color:'var(--t4)', fontSize:11.5, cursor:'pointer' }}>0</button>
+                          </div>
+                        </div>
+                      )}
+                      {pkgDiff && header.totalPackages && (
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'8px 14px', borderRadius:9, background:'var(--surface-2)', border:'1px solid var(--amber-bdr)', flexWrap:'wrap' }}>
+                          <span style={{ fontSize:12.5, color:'var(--t2)' }}>{sq?'Paketime':'Packages'}: <strong>{header.totalPackages}</strong> → {sumPkgs} <span style={{color:'var(--amber)'}}>(Δ{Math.abs((header.totalPackages||0)-sumPkgs)})</span></span>
+                          <div style={{ display:'flex', gap:5 }}>
+                            <button onClick={() => setHeader(h => ({...h, totalPackages: sumPkgs}))} style={{ padding:'3px 9px', borderRadius:6, border:'1px solid var(--amber-bdr)', background:'var(--amber-bg)', color:'var(--amber)', fontSize:11.5, fontWeight:700, cursor:'pointer' }}>{sumPkgs}</button>
+                            <button onClick={() => setHeader(h => ({...h, totalPackages: 0}))} style={{ padding:'3px 8px', borderRadius:6, border:'1px solid var(--border)', background:'transparent', color:'var(--t4)', fontSize:11.5, cursor:'pointer' }}>0</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             )}
 
-            {/* ══ DIFF WARNINGS (weight/pkg mismatch) ═══════════════ */}
-            {(weightDiff || pkgDiff) && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {/* If BOTH differ and both row sums are 0 → no packing list → show one clear message */}
-                {weightDiff && pkgDiff && sumWeight === 0 && sumPkgs === 0 && (
-                  <div style={{
-                    background: 'var(--amber-bg)', border: '1.5px solid var(--amber-bdr)',
-                    borderRadius: 12, padding: '14px 18px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap',
-                  }}>
-                    <div>
-                      <p style={{ margin:'0 0 3px', fontSize:13.5, fontWeight:700, color:'var(--amber)' }}>
-                        {sq ? 'Kjo faturë nuk ka Packing List' : 'This invoice has no Packing List'}
-                      </p>
-                      <p style={{ margin:0, fontSize:12.5, color:'var(--t3)' }}>
-                        {sq
-                          ? `Pesha (${header.totalGrossWeight} kg) dhe Paketime (${header.totalPackages}) nuk janë nga dokumenti — vendos 0 ose ngarko Packing List.`
-                          : `Weight (${header.totalGrossWeight} kg) and Packages (${header.totalPackages}) are not from the document — set to 0 or upload Packing List.`}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setHeader(h => ({ ...h, totalGrossWeight: 0, totalPackages: 0 }))}
-                      style={{ padding:'8px 16px', borderRadius:9, border:'1px solid var(--amber-bdr)', background:'var(--surface)', color:'var(--amber)', fontSize:13, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}
-                    >
-                      {sq ? 'Vendos 0 të dyja' : 'Set both to 0'}
-                    </button>
-                  </div>
-                )}
-                {/* Individual warnings when row sums are not 0 */}
-                {weightDiff && header.totalGrossWeight && !(sumWeight === 0 && sumPkgs === 0 && pkgDiff) && (
-                  <div style={{ background: 'var(--surface)', border: '1.5px solid var(--amber-bdr)', borderRadius: 12, padding: '12px 16px', borderLeft: '3px solid var(--amber)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
-                    <span style={{ fontSize:13, color:'var(--t2)' }}>
-                      {sq ? 'Pesha' : 'Weight'}: <strong>{header.totalGrossWeight}</strong> → {sq?'nga rreshtat':'from rows'}: <strong style={{color:'var(--amber)'}}>{sumWeight.toFixed(2)}</strong> <span style={{color:'var(--amber)'}}>(Δ {Math.abs((header.totalGrossWeight||0)-sumWeight).toFixed(2)} kg)</span>
-                    </span>
-                    <div style={{ display:'flex', gap:6 }}>
-                      <button onClick={() => setHeader(h => ({...h, totalGrossWeight: parseFloat(sumWeight.toFixed(2))}))} style={{ padding:'4px 10px', borderRadius:7, border:'1px solid var(--amber-bdr)', background:'var(--amber-bg)', color:'var(--amber)', fontSize:12, fontWeight:700, cursor:'pointer' }}>{sq?'Përdor':'Use'} {sumWeight.toFixed(2)}</button>
-                      <button onClick={() => setHeader(h => ({...h, totalGrossWeight: 0}))} style={{ padding:'4px 10px', borderRadius:7, border:'1px solid var(--border)', background:'transparent', color:'var(--t4)', fontSize:12, cursor:'pointer' }}>{sq?'Vendos 0':'Set 0'}</button>
-                    </div>
-                  </div>
-                )}
-                {pkgDiff && header.totalPackages && !(sumWeight === 0 && sumPkgs === 0 && weightDiff) && (
-                  <div style={{ background: 'var(--surface)', border: '1.5px solid var(--amber-bdr)', borderRadius: 12, padding: '12px 16px', borderLeft: '3px solid var(--amber)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
-                    <span style={{ fontSize:13, color:'var(--t2)' }}>
-                      {sq ? 'Paketime' : 'Packages'}: <strong>{header.totalPackages}</strong> → {sq?'nga rreshtat':'from rows'}: <strong style={{color:'var(--amber)'}}>{sumPkgs}</strong> <span style={{color:'var(--amber)'}}>(Δ {Math.abs((header.totalPackages||0)-sumPkgs)})</span>
-                    </span>
-                    <div style={{ display:'flex', gap:6 }}>
-                      <button onClick={() => setHeader(h => ({...h, totalPackages: sumPkgs}))} style={{ padding:'4px 10px', borderRadius:7, border:'1px solid var(--amber-bdr)', background:'var(--amber-bg)', color:'var(--amber)', fontSize:12, fontWeight:700, cursor:'pointer' }}>{sq?'Përdor':'Use'} {sumPkgs}</button>
-                      <button onClick={() => setHeader(h => ({...h, totalPackages: 0}))} style={{ padding:'4px 10px', borderRadius:7, border:'1px solid var(--border)', background:'transparent', color:'var(--t4)', fontSize:12, cursor:'pointer' }}>{sq?'Vendos 0':'Set 0'}</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ══ D. DOCUMENT DATA — compact summary, expandable ════ */}
+            {/* ══ D. DOCUMENT DATA — collapsed summary ══════════════ */}
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              {/* Summary header — always visible */}
-              <button
-                onClick={() => setShowDocFields(v => !v)}
-                style={{
-                  width: '100%', padding: '16px 20px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left',
-                  gap: 12,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <button onClick={() => setShowDocFields(v => !v)} style={{
+                width:'100%', padding:'14px 18px',
+                display:'flex', alignItems:'center', justifyContent:'space-between',
+                border:'none', background:'transparent', cursor:'pointer', textAlign:'left', gap:10,
+              }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:7, flexShrink:0 }}>
                     <IcoFile />
-                    <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--t1)' }}>
-                      {sq ? 'Të dhënat e dokumentit' : 'Document data'}
-                    </span>
+                    <span style={{ fontSize:13, fontWeight:700, color:'var(--t1)' }}>{sq?'Dokumenti':'Document'}</span>
                   </div>
-                  {/* Key values inline */}
-                  <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                    {header.importerName && <span style={{ fontSize:12, color:'var(--t3)' }}><strong style={{color:'var(--t2)'}}>{header.importerName}</strong></span>}
+                  <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+                    {header.importerName && <span style={{ fontSize:12, color:'var(--t2)', fontWeight:600 }}>{header.importerName}</span>}
                     {header.invoiceNumber && <span style={{ fontSize:12, color:'var(--t3)' }}>#{header.invoiceNumber}</span>}
-                    {header.totalInvoice && <span style={{ fontSize:12, color:'var(--t3)' }}>{header.totalInvoice.toFixed(2)} {header.currency}</span>}
-                    {header.totalGrossWeight && <span style={{ fontSize:12, color:'var(--t3)' }}>{header.totalGrossWeight} kg</span>}
-                    {header.totalPackages && <span style={{ fontSize:12, color:'var(--t3)' }}>{header.totalPackages} {sq?'ctn':'ctn'}</span>}
+                    {header.totalInvoice  && <span style={{ fontSize:12, color:'var(--t3)' }}>{header.totalInvoice.toFixed(2)} {header.currency}</span>}
+                    {!!header.totalGrossWeight && <span style={{ fontSize:12, color:'var(--t4)' }}>{header.totalGrossWeight} kg</span>}
                   </div>
                 </div>
-                <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
-                  <span style={{ fontSize:12, color:'var(--blue)', fontWeight:600 }}>
-                    {showDocFields ? (sq?'Mbyll':'Close') : (sq?'Ndrysho':'Edit')}
-                  </span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2.5" strokeLinecap="round"
-                    style={{ transform: showDocFields ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
+                <span style={{ fontSize:12, color:'var(--blue)', fontWeight:600, flexShrink:0, display:'flex', alignItems:'center', gap:4 }}>
+                  {showDocFields ? (sq?'Mbyll':'Close') : (sq?'Ndrysho':'Edit')}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2.5" strokeLinecap="round" style={{ transform: showDocFields ? 'rotate(180deg)':'none', transition:'transform .2s' }}>
                     <polyline points="6 9 12 15 18 9"/>
                   </svg>
-                </div>
+                </span>
               </button>
-              {/* Expandable fields */}
               {showDocFields && (
-                <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--border)' }} className="a-slide-down">
-                  <div style={{ paddingTop: 16 }}>
+                <div style={{ padding:'0 18px 18px', borderTop:'1px solid var(--border)' }} className="a-slide-down">
+                  <div style={{ paddingTop:14 }}>
                     <HeaderForm lang={lang} data={header} onChange={setHeader} />
                   </div>
                 </div>
@@ -890,17 +817,12 @@ export default function Home() {
             </div>
 
             {/* ══ E. INVOICE ROWS TABLE ═══════════════════════════════ */}
-            <div className="card" style={{ padding: '20px 24px' }}>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, gap:12, flexWrap:'wrap' }}>
-                <div>
-                  <h3 style={{ margin:'0 0 3px', fontSize:15, fontWeight:700, color:'var(--t1)' }}>
-                    {sq ? 'Rreshtat e faturës' : 'Invoice rows'}
-                    <span style={{ marginLeft:8, padding:'2px 8px', borderRadius:99, background:'var(--blue-50)', color:'var(--blue)', fontSize:12, fontWeight:700, border:'1px solid var(--blue-200)' }}>{items.length}</span>
-                  </h3>
-                  <p style={{ margin:0, fontSize:12, color:'var(--t4)' }}>
-                    {sq ? 'Redakto direkt në tabelë. Ndryshimet ruhen automatikisht.' : 'Edit directly in the table. Changes save automatically.'}
-                  </p>
-                </div>
+            <div className="card" style={{ padding:'18px 22px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+                <h3 style={{ margin:0, fontSize:14.5, fontWeight:700, color:'var(--t1)' }}>
+                  {sq ? 'Rreshtat e faturës' : 'Invoice rows'}
+                </h3>
+                <span style={{ padding:'2px 8px', borderRadius:99, background:'var(--blue-50)', color:'var(--blue)', fontSize:12, fontWeight:700, border:'1px solid var(--blue-200)' }}>{items.length}</span>
               </div>
               <ItemsTable lang={lang} items={items} onChange={setItems} />
             </div>
