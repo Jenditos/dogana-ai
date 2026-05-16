@@ -17,6 +17,9 @@ export function groupToAsycudaPositions(items: InvoiceItem[]): AsycudaPosition[]
         ? '' : ` / ${item.descriptionEn}`
       existing.descriptionSq += existing.descriptionSq.includes(item.descriptionSq)
         ? '' : ` / ${item.descriptionSq}`
+      // Worst status wins: missing > review > confirmed/ok
+      const rank = (s: string) => s === 'missing' ? 3 : s === 'review' ? 2 : 1
+      if (rank(item.status) > rank(existing.status)) existing.status = item.status
     } else {
       map.set(key, {
         positionNo: 0,

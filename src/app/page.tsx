@@ -537,7 +537,7 @@ export default function Home() {
 
   /* ── Positions table badge ── */
   const posBadge = (status: string) => {
-    if (status === 'ok' || status === 'ready') return 'badge badge-green'
+    if (status === 'ok' || status === 'ready' || status === 'confirmed') return 'badge badge-green'
     if (status === 'review') return 'badge badge-amber'
     if (status === 'missing') return 'badge badge-red'
     return 'badge badge-gray'
@@ -833,8 +833,8 @@ export default function Home() {
               const mergedCount   = items.length - positions.length
               const totalVal      = positions.reduce((s, p) => s + p.totalValue, 0)
               const totalWgt      = positions.reduce((s, p) => s + p.grossWeight, 0)
-              const allOk         = positions.every(p => p.status === 'ok' || p.status === 'ready')
-              const hasUncertain  = positions.some(p => p.status === 'review')
+              const allOk         = positions.every(p => p.status === 'ok' || p.status === 'ready' || p.status === 'confirmed')
+              const hasUncertain  = positions.some(p => p.status === 'review' && p.tariffCode)
 
               // Map tariff code → source items
               const sourceMap: Record<string, typeof items> = {}
