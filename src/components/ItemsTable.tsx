@@ -69,69 +69,268 @@ function StatusBadge({ status, lang }: { status: string; lang: Language }) {
   )
 }
 
+/* ── Validity check for bulk confirm ────────────────────────── */
+function isValidTariffCode(code: string): boolean {
+  if (!code || !code.trim()) return false
+  const clean = code.replace(/\s/g, '')
+  if (clean === '0000000000' || clean === '00000000') return false
+  if (clean.length < 8) return false
+  if (!/^\d+$/.test(clean)) return false
+  return true
+}
+
+/* ── Bulk Confirm Dialog ─────────────────────────────────────── */
+interface BulkDialogProps {
+  lang: Language
+  toConfirm: number
+  missing: number
+  invalid: number
+  onCancel: () => void
+  onConfirm: () => void
+}
+function BulkConfirmDialog({ lang, toConfirm, missing, invalid, onCancel, onConfirm }: BulkDialogProps) {
+  const sq = lang === 'sq'
+  return (
+    <div onClick={e => { if (e.target === e.currentTarget) onCancel() }} style={{
+      position: 'fixed', inset: 0, zIndex: 60,
+      background: 'rgba(15,23,42,.55)', backdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+    }}>
+      <div className="a-scale-in" style={{
+        width: '100%', maxWidth: 460,
+        background: 'var(--surface)', borderRadius: 18,
+        border: '1px solid var(--border)', boxShadow: 'var(--sh-xl)',
+        overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)' }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--t1)' }}>
+            {sq ? 'Konfirmo kodet e propozuara?' : 'Confirm proposed codes?'}
+          </h3>
+          <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--t3)', lineHeight: 1.5 }}>
+            {sq
+              ? 'Do të konfirmohen vetëm kodet tarifore me status "Për kontroll" që janë të vlefshme. Kodet që mungojnë ose janë të pavlefshme nuk do të konfirmohen.'
+              : 'Only tariff codes with status "Review" that are valid will be confirmed. Missing or invalid codes will not be affected.'}
+          </p>
+        </div>
+
+        {/* Stats */}
+        <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[
+            { label: sq ? 'Kode për konfirmim' : 'Codes to confirm', value: toConfirm, color: 'var(--green)', ok: true },
+            { label: sq ? 'Kode që mungojnë (nuk preken)' : 'Missing codes (not affected)', value: missing, color: 'var(--red)', ok: false },
+            { label: sq ? 'Kode të pavlefshme (nuk preken)' : 'Invalid codes (not affected)', value: invalid, color: 'var(--amber)', ok: false },
+          ].map(({ label, value, color, ok }) => (
+            <div key={label} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '9px 14px', borderRadius: 10,
+              background: ok ? 'var(--green-bg)' : 'var(--surface-2)',
+              border: `1px solid ${ok ? 'var(--green-bdr)' : 'var(--border)'}`,
+            }}>
+              <span style={{ fontSize: 13, color: 'var(--t2)', fontWeight: ok ? 600 : 400 }}>{label}</span>
+              <span style={{ fontSize: 15, fontWeight: 800, color }}>{value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Actions */}
+        <div style={{
+          padding: '14px 24px 20px',
+          display: 'flex', justifyContent: 'flex-end', gap: 10,
+          borderTop: '1px solid var(--border)', background: 'var(--surface-2)',
+        }}>
+          <button onClick={onCancel} className="btn btn-ghost" style={{ height: 40 }}>
+            {sq ? 'Anulo' : 'Cancel'}
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={toConfirm === 0}
+            className="btn btn-primary"
+            style={{ height: 40, gap: 7, opacity: toConfirm === 0 ? .5 : 1 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            {sq ? `Konfirmo të gjitha (${toConfirm})` : `Confirm all (${toConfirm})`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ItemsTable({ lang, items, onChange }: Props) {
   const sq = lang === 'sq'
 
+  // Filter state
+  type FilterType = 'all' | 'missing' | 'review' | 'confirmed'
+  const [filterStatus, setFilterStatus]   = useState<FilterType>('all')
+  const [showDialog, setShowDialog]       = useState(false)
+  const [successMsg, setSuccessMsg]       = useState('')
+
+  // Counts for toolbar
+  const missingCount   = items.filter(i => i.status === 'missing' || !i.tariffCode).length
+  const reviewCount    = items.filter(i => i.status === 'review').length
+  const confirmedCount = items.filter(i => i.status === 'confirmed' || i.status === 'ok').length
+
+  // Bulk confirm stats (preview for dialog)
+  const bulkToConfirm  = items.filter(i => i.status === 'review' && isValidTariffCode(i.tariffCode) && i.descriptionEn).length
+  const bulkMissing    = items.filter(i => !i.tariffCode || i.status === 'missing').length
+  const bulkInvalid    = items.filter(i => i.status === 'review' && !isValidTariffCode(i.tariffCode)).length
+
+  // Filtered items for display
+  const displayItems = items.map((item, idx) => ({ item, idx })).filter(({ item }) => {
+    if (filterStatus === 'all') return true
+    if (filterStatus === 'missing') return item.status === 'missing' || !item.tariffCode
+    if (filterStatus === 'review') return item.status === 'review'
+    if (filterStatus === 'confirmed') return item.status === 'confirmed' || item.status === 'ok'
+    return true
+  })
+
   const updateItem = (idx: number, key: keyof InvoiceItem, value: unknown) => {
-    const updated = items.map((item, i) =>
-      i === idx ? { ...item, [key]: value } : item
-    )
+    const updated = items.map((item, i) => {
+      if (i !== idx) return item
+      const newItem = { ...item, [key]: value }
+      // If tariffCode was changed on a confirmed item → revert to review
+      if (key === 'tariffCode' && item.status === 'confirmed' && value !== item.tariffCode) {
+        newItem.status = 'review'
+        newItem.confirmedAt = undefined
+      }
+      return newItem
+    })
     onChange(updated)
   }
 
   const confirmCode = (idx: number) => {
     const item = items[idx]
-    if (!item.tariffCode) return
-    // Save to persistent confirmed store
+    if (!item.tariffCode || !isValidTariffCode(item.tariffCode)) return
     saveConfirmedCode(item.descriptionEn, item.tariffCode, item.customsRate, item.vatRate)
-    // Update item status
-    const updated = items.map((it, i) => i === idx
+    onChange(items.map((it, i) => i === idx
       ? { ...it, status: 'confirmed' as const, confirmedAt: new Date().toISOString() }
       : it
-    )
-    onChange(updated)
+    ))
   }
 
   const unconfirmCode = (idx: number) => {
-    const updated = items.map((it, i) => i === idx
+    onChange(items.map((it, i) => i === idx
       ? { ...it, status: 'review' as const, confirmedAt: undefined }
       : it
-    )
+    ))
+  }
+
+  const bulkConfirm = () => {
+    const now = new Date().toISOString()
+    let count = 0
+    const updated = items.map(it => {
+      if (it.status === 'review' && isValidTariffCode(it.tariffCode) && it.descriptionEn) {
+        saveConfirmedCode(it.descriptionEn, it.tariffCode, it.customsRate, it.vatRate)
+        count++
+        return { ...it, status: 'confirmed' as const, confirmedAt: now }
+      }
+      return it
+    })
     onChange(updated)
+    setShowDialog(false)
+    setSuccessMsg(sq ? `${count} kode tarifore u konfirmuan me sukses.` : `${count} tariff codes confirmed successfully.`)
+    setTimeout(() => setSuccessMsg(''), 4000)
   }
 
   const addItem = () => {
-    const newItem: InvoiceItem = {
+    onChange([...items, {
       id: `item_${Date.now()}`,
       itemNo: String(items.length + 1),
-      descriptionEn: '',
-      descriptionSq: '',
-      qty: 0,
-      unit: 'PCS',
-      unitPrice: 0,
-      totalValue: 0,
-      packages: 0,
-      grossWeight: 0,
-      netWeight: 0,
-      volume: 0,
-      tariffCode: '',
-      customsRate: 10,
-      vatRate: 18,
-      status: 'missing',
-    }
-    onChange([...items, newItem])
+      descriptionEn: '', descriptionSq: '',
+      qty: 0, unit: 'PCS', unitPrice: 0, totalValue: 0,
+      packages: 0, grossWeight: 0, netWeight: 0, volume: 0,
+      tariffCode: '', customsRate: 10, vatRate: 18, status: 'missing',
+    }])
   }
 
-  const removeItem = (idx: number) => {
-    onChange(items.filter((_, i) => i !== idx))
-  }
+  const removeItem = (idx: number) => onChange(items.filter((_, i) => i !== idx))
 
-  const cellClass = 'px-2 py-1 text-sm'
-  const inputClass = 'w-full border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-blue-400'
+  const cellClass   = 'px-2 py-1 text-sm'
+  const inputClass  = 'w-full border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-blue-400'
   const numInputClass = inputClass + ' text-right w-20'
 
   return (
-    <div className="space-y-3">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+      {/* ── Toolbar: filters + bulk confirm ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+
+        {/* Filter tabs */}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {([
+            { key: 'all',       label: sq ? 'Të gjitha' : 'All',         count: items.length },
+            { key: 'review',    label: sq ? 'Për kontroll' : 'Review',    count: reviewCount,    color: 'var(--amber)' },
+            { key: 'missing',   label: sq ? 'Mungon' : 'Missing',         count: missingCount,   color: 'var(--red)' },
+            { key: 'confirmed', label: sq ? 'I konfirmuar' : 'Confirmed',  count: confirmedCount, color: 'var(--green)' },
+          ] as { key: FilterType; label: string; count: number; color?: string }[]).map(f => (
+            <button key={f.key} onClick={() => setFilterStatus(f.key)} style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '5px 12px', borderRadius: 8,
+              border: `1.5px solid ${filterStatus === f.key ? (f.color || 'var(--blue)') : 'var(--border)'}`,
+              background: filterStatus === f.key ? (f.key === 'all' ? 'var(--blue-50)' : f.key === 'review' ? 'var(--amber-bg)' : f.key === 'missing' ? 'var(--red-bg)' : 'var(--green-bg)') : 'var(--surface)',
+              color: filterStatus === f.key ? (f.color || 'var(--blue)') : 'var(--t3)',
+              fontSize: 12.5, fontWeight: 600, cursor: 'pointer', transition: 'all .15s',
+            }}>
+              {f.label}
+              {f.count > 0 && (
+                <span style={{
+                  minWidth: 18, height: 18, borderRadius: 99, padding: '0 5px',
+                  background: filterStatus === f.key ? (f.color || 'var(--blue)') : 'var(--surface-3)',
+                  color: filterStatus === f.key ? '#fff' : 'var(--t4)',
+                  fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>{f.count}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Bulk confirm button */}
+        {reviewCount > 0 && (
+          <button
+            onClick={() => setShowDialog(true)}
+            className="btn btn-primary"
+            style={{ height: 36, padding: '0 14px', fontSize: 13, gap: 6, background: 'var(--green)', boxShadow: '0 1px 4px rgba(5,150,105,.3)' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#047857' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--green)' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            {sq ? `Konfirmo të gjitha kodet e propozuara (${reviewCount})` : `Confirm all proposed codes (${reviewCount})`}
+          </button>
+        )}
+      </div>
+
+      {/* ── Success toast ── */}
+      {successMsg && (
+        <div className="a-fade-in" style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '11px 16px', borderRadius: 11,
+          background: 'var(--green-bg)', border: '1px solid var(--green-bdr)',
+          fontSize: 13, fontWeight: 600, color: 'var(--green)',
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          {successMsg}
+          <button onClick={() => setSuccessMsg('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--green)', fontSize: 16 }}>×</button>
+        </div>
+      )}
+
+      {/* ── Filter info ── */}
+      {filterStatus !== 'all' && (
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--t4)' }}>
+          {sq ? `Duke shfaqur ${displayItems.length} nga ${items.length} artikuj` : `Showing ${displayItems.length} of ${items.length} items`}
+          {' · '}
+          <button onClick={() => setFilterStatus('all')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--blue)', fontSize: 12, padding: 0, fontWeight: 600 }}>
+            {sq ? 'Shfaq të gjitha' : 'Show all'}
+          </button>
+        </p>
+      )}
+
       <div className="overflow-x-auto rounded-xl border border-gray-200">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
@@ -155,7 +354,7 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {items.map((item, idx) => {
+            {displayItems.map(({ item, idx }) => {
               const rowBg = item.status === 'missing' ? 'bg-red-50' : item.status === 'review' ? 'bg-yellow-50' : ''
               return (
                 <tr key={item.id} className={rowBg}>
@@ -359,6 +558,18 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
       >
         + {t(lang, 'buttons.addItem')}
       </button>
+
+      {/* Bulk Confirm Dialog */}
+      {showDialog && (
+        <BulkConfirmDialog
+          lang={lang}
+          toConfirm={bulkToConfirm}
+          missing={bulkMissing}
+          invalid={bulkInvalid}
+          onCancel={() => setShowDialog(false)}
+          onConfirm={bulkConfirm}
+        />
+      )}
     </div>
   )
 }
