@@ -928,107 +928,306 @@ export default function Home() {
                     </button>
                   </div>
 
-                  {/* Collapsible ASYCUDA table */}
+                  {/* Collapsible ASYCUDA table — full scroll support */}
                   {showAsycuda && (
                     <div className="card a-slide-down" style={{ padding: 0, overflow: 'hidden' }}>
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>Poz.</th>
-                            <th>{t(lang,'table.tariffCode')}</th>
-                            <th>{t(lang,'table.descSq')}</th>
-                            <th style={{ textAlign: 'right' }}>{t(lang,'table.qty')}</th>
-                            <th style={{ textAlign: 'right' }}>{t(lang,'table.totalValue')}</th>
-                            <th style={{ textAlign: 'right' }}>{t(lang,'table.grossWeight')}</th>
-                            <th style={{ textAlign: 'right' }}>{t(lang,'table.packages')}</th>
-                            <th style={{ textAlign: 'right' }}>{t(lang,'table.customsRate')}</th>
-                            <th style={{ textAlign: 'right' }}>{t(lang,'table.vatRate')}</th>
-                            <th>{t(lang,'table.status')}</th>
-                            <th></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {positions.map(pos => {
-                            const key     = pos.tariffCode || `NO_CODE_${pos.positionNo}`
-                            const sources = sourceMap[key] || []
-                            const merged  = sources.length > 1
-                            const isOpen  = expandedPos === pos.positionNo
 
-                            return (
-                              <>
-                                <tr key={pos.positionNo} style={{
-                                  background: pos.status === 'missing' ? 'var(--red-bg)' : pos.status === 'review' ? 'var(--amber-bg)' : 'inherit',
-                                }}>
-                                  <td><span style={{ fontWeight: 700, color: 'var(--blue)' }}>{pos.positionNo}</span></td>
-                                  <td>
-                                    <code style={{ fontSize: 12, background: 'var(--surface-3)', padding: '2px 6px', borderRadius: 5, color: 'var(--t2)' }}>
-                                      {pos.tariffCode || <span style={{ color: 'var(--red)' }}>—</span>}
-                                    </code>
-                                  </td>
-                                  <td style={{ maxWidth: 200, whiteSpace: 'normal' }}>
-                                    <div>{pos.descriptionSq}</div>
-                                    {merged && (
-                                      <span style={{
-                                        display: 'inline-block', marginTop: 3,
-                                        padding: '1px 7px', borderRadius: 99, fontSize: 10.5, fontWeight: 700,
-                                        background: 'var(--blue-100)', color: 'var(--blue)', border: '1px solid var(--blue-200)',
-                                      }}>
-                                        {sq ? `I bashkuar nga ${sources.length} rreshta` : `Merged from ${sources.length} rows`}
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pos.totalQty} {pos.unit}</td>
-                                  <td style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{pos.totalValue.toFixed(2)}</td>
-                                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pos.grossWeight.toFixed(2)}</td>
-                                  <td style={{ textAlign: 'right' }}>{pos.packages}</td>
-                                  <td style={{ textAlign: 'right' }}>{pos.customsRate}%</td>
-                                  <td style={{ textAlign: 'right' }}>{pos.vatRate}%</td>
-                                  <td><span className={posBadge(pos.status)}>{t(lang, `status.${pos.status}`)}</span></td>
-                                  <td>
-                                    <button
-                                      onClick={() => setExpandedPos(isOpen ? null : pos.positionNo)}
-                                      style={{
-                                        padding: '4px 9px', borderRadius: 7, border: '1px solid var(--border)',
-                                        background: isOpen ? 'var(--blue-50)' : 'var(--surface-3)',
-                                        color: isOpen ? 'var(--blue)' : 'var(--t4)',
-                                        fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      {isOpen ? '▲' : '▼'} {sq ? 'Burimet' : 'Sources'}
-                                    </button>
-                                  </td>
-                                </tr>
-                                {/* Source rows expansion */}
-                                {isOpen && sources.length > 0 && (
-                                  <tr key={`src-${pos.positionNo}`}>
-                                    <td colSpan={11} style={{ padding: 0, background: 'var(--blue-50)' }}>
-                                      <div style={{ padding: '10px 16px', borderTop: '1px solid var(--blue-200)' }}>
-                                        <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
-                                          {sq ? `Rreshtat burimorë (${sources.length})` : `Source rows (${sources.length})`}
-                                        </p>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                          {sources.map(src => (
-                                            <div key={src.id} style={{
-                                              display: 'flex', alignItems: 'center', gap: 12, padding: '7px 12px',
-                                              background: '#fff', borderRadius: 8, border: '1px solid var(--blue-200)',
-                                              fontSize: 12.5,
-                                            }}>
-                                              <code style={{ color: 'var(--t4)', fontSize: 11 }}>{src.itemNo}</code>
-                                              <span style={{ flex: 1, color: 'var(--t2)', fontWeight: 500 }}>{src.descriptionEn}</span>
-                                              <span style={{ color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{src.qty} {src.unit}</span>
-                                              <span style={{ color: 'var(--t1)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{src.totalValue.toFixed(2)}</span>
-                                            </div>
-                                          ))}
-                                        </div>
+                      {/* Scroll hint */}
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '8px 16px', borderBottom: '1px solid var(--border)',
+                        background: 'var(--surface-2)',
+                        fontSize: 11.5, color: 'var(--t4)', userSelect: 'none',
+                      }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <polyline points="8 6 3 12 8 18"/><polyline points="16 6 21 12 16 18"/>
+                        </svg>
+                        {sq
+                          ? 'Rrëshqit tabelën majtas/djathtas për të parë të gjitha kolonat.'
+                          : 'Scroll the table left/right to see all columns.'}
+                        <span style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
+                          {positions.length} {sq ? 'pozicione' : 'positions'}
+                        </span>
+                      </div>
+
+                      {/*
+                        Scroll wrapper:
+                        - overflow-x: auto  → horizontal scroll
+                        - overflow-y: auto  → vertical scroll
+                        - max-height: 580px → bound height so page doesn't stretch
+                        Table inside is min-width: 900px to force horizontal scroll
+                      */}
+                      <div style={{
+                        overflowX: 'auto',
+                        overflowY: 'auto',
+                        maxHeight: 580,
+                        WebkitOverflowScrolling: 'touch', // smooth on iOS
+                      }}>
+                        <table style={{
+                          width: '100%',
+                          minWidth: 940,         // forces horizontal scroll when needed
+                          borderCollapse: 'collapse',
+                          tableLayout: 'fixed',
+                          fontSize: 13,
+                        }}>
+                          {/* Column widths */}
+                          <colgroup>
+                            <col style={{ width: 52 }}  />  {/* Poz. — sticky */}
+                            <col style={{ width: 126 }} />  {/* Kodi tarifor — sticky */}
+                            <col style={{ width: 200 }} />  {/* Pershkrimi shqip */}
+                            <col style={{ width: 90 }}  />  {/* Sasia */}
+                            <col style={{ width: 96 }}  />  {/* Vlera totale */}
+                            <col style={{ width: 96 }}  />  {/* Pesha bruto */}
+                            <col style={{ width: 80 }}  />  {/* Paketime */}
+                            <col style={{ width: 76 }}  />  {/* Dogana % */}
+                            <col style={{ width: 68 }}  />  {/* TVSH % */}
+                            <col style={{ width: 90 }}  />  {/* Statusi */}
+                            <col style={{ width: 80 }}  />  {/* Burimet */}
+                          </colgroup>
+
+                          {/* ── Sticky header ── */}
+                          <thead>
+                            <tr>
+                              {/* Sticky col 1 — intersection of sticky header + sticky col */}
+                              <th style={{
+                                position: 'sticky', top: 0, left: 0, zIndex: 4,
+                                background: 'var(--surface-2)',
+                                borderRight: '2px solid var(--border)',
+                                padding: '10px 12px', textAlign: 'left',
+                                fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                                letterSpacing: '.06em', color: 'var(--t4)',
+                                boxShadow: '2px 0 4px rgba(0,0,0,.04)',
+                              }}>Poz.</th>
+                              {/* Sticky col 2 */}
+                              <th style={{
+                                position: 'sticky', top: 0, left: 52, zIndex: 4,
+                                background: 'var(--surface-2)',
+                                borderRight: '2px solid var(--border-2)',
+                                padding: '10px 12px', textAlign: 'left',
+                                fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                                letterSpacing: '.06em', color: 'var(--t4)',
+                                boxShadow: '3px 0 8px rgba(0,0,0,.06)',
+                              }}>{t(lang,'table.tariffCode')}</th>
+                              {/* Normal headers */}
+                              {[
+                                t(lang,'table.descSq'),
+                                t(lang,'table.qty'),
+                                t(lang,'table.totalValue'),
+                                t(lang,'table.grossWeight'),
+                                t(lang,'table.packages'),
+                                t(lang,'table.customsRate'),
+                                t(lang,'table.vatRate'),
+                                t(lang,'table.status'),
+                                '',
+                              ].map((h, i) => (
+                                <th key={i} style={{
+                                  position: 'sticky', top: 0, zIndex: 3,
+                                  background: 'var(--surface-2)',
+                                  padding: '10px 12px',
+                                  textAlign: i >= 1 && i <= 5 ? 'right' : 'left',
+                                  fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                                  letterSpacing: '.06em', color: 'var(--t4)',
+                                  whiteSpace: 'nowrap',
+                                  borderBottom: '1px solid var(--border)',
+                                }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+
+                          {/* ── Body ── */}
+                          <tbody>
+                            {positions.map((pos, rowIdx) => {
+                              const key     = pos.tariffCode || `NO_CODE_${pos.positionNo}`
+                              const sources = sourceMap[key] || []
+                              const merged  = sources.length > 1
+                              const isOpen  = expandedPos === pos.positionNo
+                              const rowBg   = pos.status === 'missing' ? 'var(--red-bg)'
+                                            : pos.status === 'review'  ? 'rgba(217,119,6,.06)'
+                                            : rowIdx % 2 === 0         ? 'var(--surface)' : 'var(--surface-2)'
+
+                              return (
+                                <>
+                                  <tr key={pos.positionNo}
+                                    style={{ background: rowBg, transition: 'background .15s' }}
+                                    onMouseEnter={e => { if (pos.status === 'ok') (e.currentTarget as HTMLTableRowElement).style.background = 'var(--blue-50)' }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.background = rowBg }}
+                                  >
+                                    {/* Sticky col 1 — Poz. */}
+                                    <td style={{
+                                      position: 'sticky', left: 0, zIndex: 2,
+                                      background: rowBg,
+                                      borderRight: '2px solid var(--border)',
+                                      padding: '9px 12px',
+                                      boxShadow: '2px 0 4px rgba(0,0,0,.04)',
+                                    }}>
+                                      <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--blue)' }}>{pos.positionNo}</span>
+                                    </td>
+
+                                    {/* Sticky col 2 — Kodi tarifor */}
+                                    <td style={{
+                                      position: 'sticky', left: 52, zIndex: 2,
+                                      background: rowBg,
+                                      borderRight: '2px solid var(--border-2)',
+                                      padding: '9px 12px',
+                                      boxShadow: '3px 0 8px rgba(0,0,0,.06)',
+                                    }}>
+                                      {pos.tariffCode ? (
+                                        <code style={{
+                                          fontSize: 12, fontWeight: 600,
+                                          background: 'var(--surface-3)',
+                                          padding: '2px 7px', borderRadius: 5,
+                                          color: 'var(--t1)',
+                                          fontFamily: 'monospace',
+                                          letterSpacing: '.03em',
+                                          whiteSpace: 'nowrap',
+                                        }}>
+                                          {pos.tariffCode.slice(0,4)} {pos.tariffCode.slice(4,8)} {pos.tariffCode.slice(8)}
+                                        </code>
+                                      ) : (
+                                        <span style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }}>— Mungon</span>
+                                      )}
+                                    </td>
+
+                                    {/* Description */}
+                                    <td style={{ padding: '9px 12px', verticalAlign: 'top' }}>
+                                      <div style={{ fontSize: 12.5, color: 'var(--t1)', lineHeight: 1.35 }}>
+                                        {pos.descriptionSq}
                                       </div>
+                                      {merged && (
+                                        <span style={{
+                                          display: 'inline-flex', alignItems: 'center', gap: 3,
+                                          marginTop: 3, padding: '1px 7px', borderRadius: 99,
+                                          fontSize: 10.5, fontWeight: 700,
+                                          background: 'var(--blue-100)', color: 'var(--blue)',
+                                          border: '1px solid var(--blue-200)',
+                                        }}>
+                                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                                          {sq ? `${sources.length} rreshta` : `${sources.length} rows`}
+                                        </span>
+                                      )}
+                                    </td>
+
+                                    {/* Numeric columns */}
+                                    <td style={{ padding: '9px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 12.5, color: 'var(--t2)', whiteSpace: 'nowrap' }}>
+                                      {pos.totalQty.toLocaleString()} {pos.unit}
+                                    </td>
+                                    <td style={{ padding: '9px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: 12.5, color: 'var(--t1)', whiteSpace: 'nowrap' }}>
+                                      {pos.totalValue.toFixed(2)}
+                                    </td>
+                                    <td style={{ padding: '9px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 12.5, color: 'var(--t2)', whiteSpace: 'nowrap' }}>
+                                      {pos.grossWeight.toFixed(2)}
+                                    </td>
+                                    <td style={{ padding: '9px 12px', textAlign: 'right', fontSize: 12.5, color: 'var(--t2)' }}>
+                                      {pos.packages}
+                                    </td>
+                                    <td style={{ padding: '9px 12px', textAlign: 'right', fontSize: 12.5, color: 'var(--t2)' }}>
+                                      {pos.customsRate}%
+                                    </td>
+                                    <td style={{ padding: '9px 12px', textAlign: 'right', fontSize: 12.5, color: 'var(--t2)' }}>
+                                      {pos.vatRate}%
+                                    </td>
+
+                                    {/* Status */}
+                                    <td style={{ padding: '9px 12px' }}>
+                                      <span className={posBadge(pos.status)}>
+                                        {t(lang, `status.${pos.status}`)}
+                                      </span>
+                                    </td>
+
+                                    {/* Sources button */}
+                                    <td style={{ padding: '9px 8px' }}>
+                                      <button
+                                        onClick={() => setExpandedPos(isOpen ? null : pos.positionNo)}
+                                        style={{
+                                          padding: '4px 10px', borderRadius: 7,
+                                          border: `1px solid ${isOpen ? 'var(--blue-200)' : 'var(--border)'}`,
+                                          background: isOpen ? 'var(--blue-50)' : 'var(--surface-3)',
+                                          color: isOpen ? 'var(--blue)' : 'var(--t4)',
+                                          fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                          whiteSpace: 'nowrap', transition: 'all .15s',
+                                          display: 'flex', alignItems: 'center', gap: 4,
+                                        }}
+                                      >
+                                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                                          style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>
+                                          <polyline points="6 9 12 15 18 9"/>
+                                        </svg>
+                                        {sq ? 'Burimi' : 'Source'}
+                                      </button>
                                     </td>
                                   </tr>
-                                )}
-                              </>
-                            )
-                          })}
-                        </tbody>
-                      </table>
+
+                                  {/* Expanded source rows */}
+                                  {isOpen && sources.length > 0 && (
+                                    <tr key={`src-${pos.positionNo}`}>
+                                      <td colSpan={11} style={{ padding: 0, background: 'var(--blue-50)' }}>
+                                        <div style={{ padding: '12px 16px 12px 178px', borderTop: '1px solid var(--blue-200)' }}>
+                                          <p style={{
+                                            margin: '0 0 8px', fontSize: 10.5, fontWeight: 700,
+                                            color: 'var(--blue)', letterSpacing: '.05em', textTransform: 'uppercase',
+                                          }}>
+                                            {sq ? `Rreshtat burimorë (${sources.length})` : `Source rows (${sources.length})`}
+                                          </p>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                            {sources.map(src => (
+                                              <div key={src.id} style={{
+                                                display: 'flex', alignItems: 'center', gap: 14,
+                                                padding: '7px 12px', background: '#fff',
+                                                borderRadius: 8, border: '1px solid var(--blue-200)',
+                                                fontSize: 12.5,
+                                              }}>
+                                                <code style={{ color: 'var(--t4)', fontSize: 11, flexShrink: 0 }}>{src.itemNo}</code>
+                                                <span style={{ flex: 1, color: 'var(--t2)', fontWeight: 500, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                  {src.descriptionEn}
+                                                </span>
+                                                <span style={{ color: 'var(--t3)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{src.qty.toLocaleString()} {src.unit}</span>
+                                                <span style={{ color: 'var(--t1)', fontWeight: 700, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{src.totalValue.toFixed(2)}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </>
+                              )
+                            })}
+                          </tbody>
+
+                          {/* ── Totals footer ── */}
+                          <tfoot>
+                            <tr style={{ background: 'var(--surface-2)', borderTop: '2px solid var(--border-2)' }}>
+                              <td style={{
+                                position: 'sticky', left: 0, zIndex: 2,
+                                background: 'var(--surface-2)',
+                                padding: '10px 12px', fontWeight: 700, fontSize: 12, color: 'var(--t2)',
+                                borderRight: '2px solid var(--border)',
+                              }}>—</td>
+                              <td style={{
+                                position: 'sticky', left: 52, zIndex: 2,
+                                background: 'var(--surface-2)',
+                                padding: '10px 12px', fontWeight: 700, fontSize: 11, color: 'var(--t3)',
+                                borderRight: '2px solid var(--border-2)',
+                                textTransform: 'uppercase', letterSpacing: '.04em',
+                              }}>TOTAL</td>
+                              <td style={{ padding: '10px 12px' }}></td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 12.5 }}>
+                                {positions.reduce((s, p) => s + p.totalQty, 0).toLocaleString()}
+                              </td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: 13, color: 'var(--t1)' }}>
+                                {positions.reduce((s, p) => s + p.totalValue, 0).toFixed(2)}
+                              </td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 12.5 }}>
+                                {positions.reduce((s, p) => s + p.grossWeight, 0).toFixed(2)}
+                              </td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>
+                                {positions.reduce((s, p) => s + p.packages, 0)}
+                              </td>
+                              <td colSpan={4}></td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>
