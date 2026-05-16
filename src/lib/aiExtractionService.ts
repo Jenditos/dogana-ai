@@ -122,12 +122,15 @@ Invoice:      F3-2,-4 | CERAMIC PLATE | 216 PCS | €0.86 | €185.76
 Packing List: F3-2,-4 | CERAMIC PLATE | 216 | 6 CTN | 125.7 KG | 0.20 CBM
 Merged result: { itemNo:"F3-2,-4", descriptionEn:"CERAMIC PLATE", qty:216, unit:"PCS", unitPrice:0.86, totalValue:185.76, packages:6, grossWeight:125.7, netWeight:125.7, volume:0.20 }
 
-STRICT RULES:
-- DO NOT leave packages=0 or grossWeight=0 if the Packing List has these values
-- DO NOT report weight/packages as missing — search ALL pages first
-- If a Packing List row covers multiple items (e.g. "F3-1,F3-2"), assign shared data to each matching item
-- Extract ALL items — do not skip any Invoice rows
-- Use 0 only if the value is genuinely absent in ALL tables after searching all pages
+STRICT DATA INTEGRITY RULES — read carefully:
+1. DO NOT invent or estimate weights/packages. If an item has no matching Packing List row, use packages=0, grossWeight=0, volume=0. Do NOT guess.
+2. DO NOT leave packages=0 if the Packing List clearly has data for that item.
+3. DO NOT count any item twice in packages or weight.
+4. Items with very low value or 1 PCS (like HEATER PEN 1 PCS €33.56) MUST be included — do not skip them.
+5. The LAST 2-3 pages often contain: small misc items, HEATER PEN, MACHINE, CLOTHES SAMPLES — read every page to the very end.
+6. If a Packing List row covers multiple items (e.g. "F3-1,F3-2"), assign data to each matching item individually.
+7. Extract ALL items — no skipping. A common error is missing the last 3-5 items on the last page.
+8. COMPLETENESS CHECK: Before returning, count your extracted items and verify sum(totalValue) ≈ invoice total. If items are missing, look again at the last pages.
 
 Return ONLY: { "items": [ { "itemNo":"", "descriptionEn":"", "qty":0, "unit":"", "unitPrice":0, "totalValue":0, "packages":0, "grossWeight":0, "netWeight":0, "volume":0 }, ... ] }
 
@@ -297,9 +300,49 @@ export async function extractWithPdf(
     if (!truncated) {
       itemsParsed = parseJSON(itemsRaw) as { items: Partial<InvoiceItem>[] }
     } else {
-      // Truncated: extract in batches by item range
       console.warn('[AI] Items truncated, chunking by range...')
       itemsParsed = await extractItemsChunked(apiKey, attachments)
+    }
+
+    // ── Recovery: if sum(items) ≠ invoice total, find missing items ──
+    // This catches cases where GPT missed the last few rows (e.g. HEATER PEN on last page)
+    const headerTotal   = Number(headerParsed.header?.totalInvoice) || 0
+    const extractedSum  = (itemsParsed.items || []).reduce((s, i) => s + (Number(i.totalValue) || 0), 0)
+    const valueDiff     = Math.abs(headerTotal - extractedSum)
+
+    if (headerTotal > 0 && valueDiff > 0.5) {
+      console.warn(`[AI] Sum mismatch: extracted=${extractedSum.toFixed(2)}, expected=${headerTotal} (diff=${valueDiff.toFixed(2)}). Running recovery call...`)
+      const recoveryPrompt = `RECOVERY EXTRACTION — some line items were missed in the previous extraction.
+
+Known facts:
+- Invoice total stated in document: ${headerTotal}
+- Items already extracted have a sum of: ${extractedSum.toFixed(2)}
+- Missing amount: ${(headerTotal - extractedSum).toFixed(2)}
+
+TASK: Find ONLY the items that are MISSING. Look especially at:
+- The LAST pages of the document (last 2-3 pages)
+- Small misc items (e.g. HEATER PEN, MACHINE, LASER MACHINE, CLOTHES SAMPLES)
+- Items with quantity = 1 PCS that may have been skipped
+- Items at the very bottom of any invoice table
+
+Already extracted item numbers (do NOT repeat these):
+${(itemsParsed.items || []).map(i => i.itemNo).filter(Boolean).join(', ')}
+
+Return ONLY the missing items: { "items": [ { "itemNo":"", "descriptionEn":"", "qty":0, "unit":"", "unitPrice":0, "totalValue":0, "packages":0, "grossWeight":0, "netWeight":0, "volume":0 } ] }`
+
+      const { raw: recoveryRaw } = await callOpenAIRaw(apiKey, 'gpt-4o-mini', [
+        { type: 'text', text: recoveryPrompt },
+        ...attachments,
+      ])
+      try {
+        const recovery = parseJSON(recoveryRaw) as { items: Partial<InvoiceItem>[] }
+        if (recovery.items?.length > 0) {
+          console.log(`[AI] Recovery found ${recovery.items.length} missing items`)
+          itemsParsed.items = [...(itemsParsed.items || []), ...recovery.items]
+        }
+      } catch (e) {
+        console.warn('[AI] Recovery parse failed:', e)
+      }
     }
 
     return {

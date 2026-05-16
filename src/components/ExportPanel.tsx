@@ -1,7 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import type { HeaderData, InvoiceItem, AsycudaPosition, MissingField, AppSettings, Language } from '@/types'
 import { t } from '@/lib/i18n'
+import { validateSums, type SumCheck } from '@/lib/validationService'
 
 interface Props {
   lang: Language
@@ -30,6 +31,14 @@ export default function ExportPanel({ lang, header, items, positions, missingFie
   const [oldValues, setOldValues] = useState<unknown[]>([])
   const [showXml, setShowXml] = useState(false)
   const [requiresDraft, setRequiresDraft] = useState(false)
+
+  const sq = lang === 'sq'
+
+  // Live sum validation — recalculates when data changes
+  const sumValidation = useMemo(
+    () => validateSums(header, items, positions),
+    [header, items, positions]
+  )
 
   const generateXml = async (forceDraft = false) => {
     setLoading('xml')
@@ -111,7 +120,6 @@ export default function ExportPanel({ lang, header, items, positions, missingFie
   }
 
   const hasData = items.length > 0 || positions.length > 0
-  const sq = lang === 'sq'
 
   /* ── Inline SVG icons ── */
   const IcoGenerate = () => (
@@ -206,6 +214,86 @@ export default function ExportPanel({ lang, header, items, positions, missingFie
         ))}
       </div>
 
+      {/* ── Sum Validation Card (always shown when data exists) ── */}
+      {hasData && sumValidation.checks.length > 0 && (
+        <div style={{
+          border: `1.5px solid ${sumValidation.allOk ? 'var(--green-bdr)' : sumValidation.hasBlocker ? 'var(--red-bdr)' : 'var(--amber-bdr)'}`,
+          borderRadius: 14, overflow: 'hidden',
+        }}>
+          {/* Header */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '11px 16px',
+            background: sumValidation.allOk ? 'var(--green-bg)' : sumValidation.hasBlocker ? 'var(--red-bg)' : 'var(--amber-bg)',
+          }}>
+            <span style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              fontSize: 13, fontWeight: 700,
+              color: sumValidation.allOk ? 'var(--green)' : sumValidation.hasBlocker ? 'var(--red)' : 'var(--amber)',
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/>
+                <line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/>
+              </svg>
+              {sq ? 'Kontrolli i shumave' : 'Sum validation'}
+            </span>
+            <span style={{
+              fontSize: 11.5, fontWeight: 700, padding: '2px 9px', borderRadius: 99,
+              background: sumValidation.allOk ? 'var(--green)' : sumValidation.hasBlocker ? 'var(--red)' : 'var(--amber)',
+              color: '#fff',
+            }}>
+              {sumValidation.allOk
+                ? (sq ? 'Shumat saktë' : 'Sums correct')
+                : sumValidation.hasBlocker
+                  ? (sq ? 'Diferenca blokuese' : 'Blocking difference')
+                  : (sq ? 'Diferenca e vogël' : 'Minor difference')}
+            </span>
+          </div>
+
+          {/* Blocking error message */}
+          {sumValidation.hasBlocker && (
+            <div style={{ padding: '10px 16px', background: 'var(--red-bg)', borderBottom: '1px solid var(--red-bdr)' }}>
+              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--red)' }}>
+                {sq
+                  ? 'Kontrolli i shumave nuk kaloi. XML nuk mund të gjenerohet si final.'
+                  : 'Sum validation failed. XML cannot be generated as final.'}
+              </p>
+            </div>
+          )}
+
+          {/* Check rows */}
+          <div style={{ background: 'var(--surface)' }}>
+            {sumValidation.checks.map((check: SumCheck, i) => (
+              <div key={i} style={{
+                display: 'grid', gridTemplateColumns: '1fr auto auto auto',
+                gap: 12, padding: '9px 16px', alignItems: 'center',
+                borderBottom: i < sumValidation.checks.length - 1 ? '1px solid var(--border)' : 'none',
+                background: check.ok ? 'transparent' : check.blocking ? 'rgba(220,38,38,.03)' : 'rgba(217,119,6,.03)',
+              }}>
+                <span style={{ fontSize: 12.5, color: 'var(--t2)', fontWeight: check.ok ? 400 : 600 }}>
+                  {check.label}
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--t4)', fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>
+                  {sq ? 'Pritet' : 'Expected'}: <strong style={{ color: 'var(--t2)' }}>{check.expected.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--t4)', fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>
+                  {sq ? 'Aktual' : 'Actual'}: <strong style={{ color: check.ok ? 'var(--t2)' : check.blocking ? 'var(--red)' : 'var(--amber)' }}>{check.actual.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                </span>
+                <span style={{
+                  fontSize: 11.5, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                  background: check.ok ? 'var(--green-bg)' : check.blocking ? 'var(--red-bg)' : 'var(--amber-bg)',
+                  color: check.ok ? 'var(--green)' : check.blocking ? 'var(--red)' : 'var(--amber)',
+                  border: `1px solid ${check.ok ? 'var(--green-bdr)' : check.blocking ? 'var(--red-bdr)' : 'var(--amber-bdr)'}`,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {check.ok ? '✓ OK' : `Δ ${check.diff > 0 ? '+' : ''}${check.diff.toFixed(2)}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Errors ── */}
       {errors.length > 0 && (
         <div style={{ background: 'var(--red-bg)', border: '1px solid var(--red-bdr)', borderRadius: 14, padding: '14px 16px' }}>
@@ -270,15 +358,33 @@ export default function ExportPanel({ lang, header, items, positions, missingFie
       {/* ── Action buttons ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-        {/* Generate */}
+        {/* Generate — blocked if sum validation has a blocking failure */}
         <button
-          onClick={() => generateXml(false)}
+          onClick={() => sumValidation.hasBlocker ? generateXml(true) : generateXml(false)}
           disabled={!hasData || loading === 'xml'}
           className="btn btn-primary"
-          style={{ width: '100%', height: 56, fontSize: 16, fontWeight: 700, borderRadius: 14, gap: 10 }}
+          style={{
+            width: '100%', height: 56, fontSize: 16, fontWeight: 700, borderRadius: 14, gap: 10,
+            background: sumValidation.hasBlocker ? 'var(--amber)' : undefined,
+            boxShadow: sumValidation.hasBlocker ? '0 1px 4px rgba(217,119,6,.4)' : undefined,
+          }}
+          title={sumValidation.hasBlocker
+            ? (sq ? 'Shumat nuk përputhen — do të gjenerohet Draft' : 'Sums do not match — will generate Draft')
+            : undefined}
         >
-          {loading === 'xml' ? <><IcoSpinner />{t(lang, 'messages.validating')}</> : <><IcoGenerate />{t(lang, 'buttons.generate')}</>}
+          {loading === 'xml'
+            ? <><IcoSpinner />{t(lang, 'messages.validating')}</>
+            : sumValidation.hasBlocker
+              ? <><IcoGenerate />{sq ? 'Gjenero Draft (shumat gabim)' : 'Generate Draft (sums wrong)'}</>
+              : <><IcoGenerate />{t(lang, 'buttons.generate')}</>}
         </button>
+        {sumValidation.hasBlocker && (
+          <p style={{ margin: '-4px 0 0', fontSize: 11.5, color: 'var(--amber)', textAlign: 'center' }}>
+            {sq
+              ? 'Shumat nuk përputhen. XML do të shënohet si Draft derisa të korrigjohen rreshtat.'
+              : 'Sums do not match. XML will be marked as Draft until rows are corrected.'}
+          </p>
+        )}
 
         {/* Download row */}
         {xml && (

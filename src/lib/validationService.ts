@@ -2,6 +2,89 @@ import type { HeaderData, AsycudaPosition, InvoiceItem, ValidationResult, Missin
 
 const TOLERANCE = 0.05
 
+/* ── Sum validation result ───────────────────────────────────── */
+export interface SumCheck {
+  label:    string      // field name
+  expected: number      // value from header / packing list
+  actual:   number      // calculated from rows
+  diff:     number      // actual - expected
+  ok:       boolean     // |diff| <= tolerance
+  blocking: boolean     // must match exactly for XML export
+}
+
+export interface SumValidationResult {
+  checks:  SumCheck[]
+  allOk:   boolean
+  hasBlocker: boolean   // any blocking check failed
+}
+
+/**
+ * Validates that row-level sums match the declared header totals.
+ * Called before XML export; blocking failures prevent export.
+ */
+export function validateSums(
+  header: Partial<HeaderData>,
+  items: InvoiceItem[],
+  positions: AsycudaPosition[]
+): SumValidationResult {
+  const VALUE_TOL   = 0.05   // €0.05 tolerance for rounding
+  const WEIGHT_TOL  = 1.0    // 1 kg tolerance
+  const PKG_TOL     = 0      // 0 package tolerance (must be exact)
+
+  const sumItemsValue   = items.reduce((s, i) => s + i.totalValue,    0)
+  const sumItemsWeight  = items.reduce((s, i) => s + i.grossWeight,   0)
+  const sumItemsPkgs    = items.reduce((s, i) => s + i.packages,      0)
+  const sumPosValue     = positions.reduce((s, p) => s + p.totalValue,   0)
+  const sumPosWeight    = positions.reduce((s, p) => s + p.grossWeight,  0)
+
+  const invoiceTotal   = Number(header.totalInvoice)      || 0
+  const headerWeight   = Number(header.totalGrossWeight)  || 0
+  const headerPkgs     = Number(header.totalPackages)     || 0
+
+  const checks: SumCheck[] = []
+
+  if (invoiceTotal > 0) {
+    const diff = sumItemsValue - invoiceTotal
+    checks.push({
+      label: 'Vlera e rreshtave vs. totali i faturës',
+      expected: invoiceTotal, actual: sumItemsValue, diff,
+      ok: Math.abs(diff) <= VALUE_TOL, blocking: true,
+    })
+    // Also check ASYCUDA grouped sum
+    if (positions.length > 0) {
+      const diffPos = sumPosValue - invoiceTotal
+      checks.push({
+        label: 'Vlera ASYCUDA vs. totali i faturës',
+        expected: invoiceTotal, actual: sumPosValue, diff: diffPos,
+        ok: Math.abs(diffPos) <= VALUE_TOL, blocking: false,
+      })
+    }
+  }
+
+  if (headerWeight > 0) {
+    const diff = sumItemsWeight - headerWeight
+    checks.push({
+      label: 'Pesha e rreshtave vs. packing list total',
+      expected: headerWeight, actual: sumItemsWeight, diff,
+      ok: Math.abs(diff) <= WEIGHT_TOL, blocking: false,
+    })
+  }
+
+  if (headerPkgs > 0) {
+    const diff = sumItemsPkgs - headerPkgs
+    checks.push({
+      label: 'Paketime e rreshtave vs. packing list total',
+      expected: headerPkgs, actual: sumItemsPkgs, diff,
+      ok: Math.abs(diff) <= PKG_TOL, blocking: false,
+    })
+  }
+
+  const allOk      = checks.every(c => c.ok)
+  const hasBlocker = checks.some(c => !c.ok && c.blocking)
+
+  return { checks, allOk, hasBlocker }
+}
+
 export function validateAll(
   header: HeaderData,
   items: InvoiceItem[],
