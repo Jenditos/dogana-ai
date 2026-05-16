@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { extractWithAI, extractWithPdf } from '@/lib/aiExtractionService'
 import { getMissingFields } from '@/lib/validationService'
 import { groupToAsycudaPositions } from '@/lib/groupPositions'
+import { guardApiRequest } from '@/lib/requestGuards'
 import type { HeaderData } from '@/types'
 
 const MAX_FILES = 5
@@ -48,6 +49,9 @@ function hasExpectedSignature(buffer: Buffer, fileType: 'pdf' | 'image', mimeTyp
 
 export async function POST(req: NextRequest) {
   try {
+    const guarded = guardApiRequest(req, 'extract', { limit: 20, windowMs: 60 * 60 * 1000 })
+    if (guarded) return guarded
+
     const contentLength = Number(req.headers.get('content-length') || 0)
     if (contentLength > MAX_TOTAL_SIZE_BYTES) {
       return NextResponse.json({ error: 'Ngarkimi është shumë i madh. Maksimumi është 25 MB.' }, { status: 413 })

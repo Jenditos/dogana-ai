@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateXml, detectOldValues } from '@/lib/xmlTemplateEngine'
 import { validateAll } from '@/lib/validationService'
+import { guardApiRequest } from '@/lib/requestGuards'
 import type { HeaderData, AsycudaPosition, InvoiceItem, AppSettings } from '@/types'
 
 export async function POST(req: NextRequest) {
   try {
+    const guarded = guardApiRequest(req, 'generate-xml', { limit: 120, windowMs: 60 * 60 * 1000 })
+    if (guarded) return guarded
+
     const body = await req.json()
     const { header, items, positions, settings, forceDraft } = body as {
       header: HeaderData

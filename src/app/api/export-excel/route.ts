@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
       missingFields: MissingField[]
     }
 
-    const buffer = generateExcel(header, items, positions, missingFields)
+    const buffer = await generateExcel(header, items, positions, missingFields)
     const filename = `DUDI_${header.invoiceNumber || 'export'}_${Date.now()}.xlsx`
     const uint8 = new Uint8Array(buffer)
 
