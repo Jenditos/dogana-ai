@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import type { InvoiceItem, Language } from '@/types'
 import { t } from '@/lib/i18n'
+import { saveConfirmedCode } from '@/lib/tariffMapper'
 
 interface Props {
   lang: Language
@@ -9,18 +10,92 @@ interface Props {
   onChange: (items: InvoiceItem[]) => void
 }
 
-const STATUS_BADGE: Record<string, string> = {
-  ok: 'bg-green-100 text-green-800',
-  missing: 'bg-red-100 text-red-800',
-  review: 'bg-yellow-100 text-yellow-800',
-  ready: 'bg-green-200 text-green-900',
-  draft: 'bg-gray-100 text-gray-600',
+/* ── Status config ───────────────────────────────────────────── */
+const STATUS_CONFIG: Record<string, { bg: string; color: string; border: string; label: Record<string, string> }> = {
+  confirmed: {
+    bg: 'rgba(5,150,105,.08)', color: 'var(--green)', border: 'var(--green-bdr)',
+    label: { sq: 'I konfirmuar', en: 'Confirmed' },
+  },
+  ok: {
+    bg: 'rgba(5,150,105,.08)', color: 'var(--green)', border: 'var(--green-bdr)',
+    label: { sq: 'Në rregull', en: 'OK' },
+  },
+  review: {
+    bg: 'var(--amber-bg)', color: 'var(--amber)', border: 'var(--amber-bdr)',
+    label: { sq: 'Për kontroll', en: 'Review' },
+  },
+  missing: {
+    bg: 'var(--red-bg)', color: 'var(--red)', border: 'var(--red-bdr)',
+    label: { sq: 'Mungon', en: 'Missing' },
+  },
+  ready: {
+    bg: 'rgba(5,150,105,.08)', color: 'var(--green)', border: 'var(--green-bdr)',
+    label: { sq: 'Gati', en: 'Ready' },
+  },
+  draft: {
+    bg: 'var(--surface-3)', color: 'var(--t3)', border: 'var(--border)',
+    label: { sq: 'Draft', en: 'Draft' },
+  },
+}
+
+function StatusBadge({ status, lang }: { status: string; lang: Language }) {
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.missing
+  const lbl = cfg.label[lang] || cfg.label.sq
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '2px 8px', borderRadius: 99, whiteSpace: 'nowrap',
+      fontSize: 11.5, fontWeight: 700,
+      background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`,
+    }}>
+      {status === 'confirmed' && (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      )}
+      {status === 'review' && (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          <circle cx="12" cy="12" r="9"/>
+        </svg>
+      )}
+      {status === 'missing' && (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      )}
+      {lbl}
+    </span>
+  )
 }
 
 export default function ItemsTable({ lang, items, onChange }: Props) {
+  const sq = lang === 'sq'
+
   const updateItem = (idx: number, key: keyof InvoiceItem, value: unknown) => {
     const updated = items.map((item, i) =>
       i === idx ? { ...item, [key]: value } : item
+    )
+    onChange(updated)
+  }
+
+  const confirmCode = (idx: number) => {
+    const item = items[idx]
+    if (!item.tariffCode) return
+    // Save to persistent confirmed store
+    saveConfirmedCode(item.descriptionEn, item.tariffCode, item.customsRate, item.vatRate)
+    // Update item status
+    const updated = items.map((it, i) => i === idx
+      ? { ...it, status: 'confirmed' as const, confirmedAt: new Date().toISOString() }
+      : it
+    )
+    onChange(updated)
+  }
+
+  const unconfirmCode = (idx: number) => {
+    const updated = items.map((it, i) => i === idx
+      ? { ...it, status: 'review' as const, confirmedAt: undefined }
+      : it
     )
     onChange(updated)
   }
@@ -185,11 +260,60 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                       onChange={e => updateItem(idx, 'vatRate', parseFloat(e.target.value) || 0)}
                     />
                   </td>
-                  <td className={cellClass + ' text-center'}>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_BADGE[item.status]}`}>
-                      {t(lang, `status.${item.status}`)}
-                    </span>
+                  {/* Status + Confirm button */}
+                  <td className={cellClass} style={{ verticalAlign: 'middle' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                      <StatusBadge status={item.status} lang={lang} />
+
+                      {/* Confirm button: show for 'review' items that have a code */}
+                      {item.status === 'review' && item.tariffCode && (
+                        <button
+                          onClick={() => confirmCode(idx)}
+                          title={sq ? 'Konfirmo kodin tarifor' : 'Confirm tariff code'}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '2px 8px', borderRadius: 6, fontSize: 10.5, fontWeight: 700,
+                            border: '1px solid var(--green-bdr)', background: 'var(--green-bg)',
+                            color: 'var(--green)', cursor: 'pointer', whiteSpace: 'nowrap',
+                            transition: 'all .15s',
+                          }}
+                        >
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                          {sq ? 'Konfirmo' : 'Confirm'}
+                        </button>
+                      )}
+
+                      {/* Unconfirm button: shown for confirmed items */}
+                      {item.status === 'confirmed' && (
+                        <button
+                          onClick={() => unconfirmCode(idx)}
+                          title={sq ? 'Kthe te "Për kontroll"' : 'Mark as needs review'}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '2px 8px', borderRadius: 6, fontSize: 10.5, fontWeight: 600,
+                            border: '1px solid var(--border)', background: 'var(--surface-3)',
+                            color: 'var(--t4)', cursor: 'pointer', whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {sq ? 'Çkonfirmo' : 'Unconfirm'}
+                        </button>
+                      )}
+
+                      {/* Material note for items needing clarification */}
+                      {item.requiresMaterial && item.status !== 'confirmed' && (
+                        <span style={{
+                          fontSize: 10, color: 'var(--amber)', display: 'flex', alignItems: 'center', gap: 3,
+                        }}>
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          {item.materialNote || (sq ? 'Specifikoni materialin' : 'Specify material')}
+                        </span>
+                      )}
+                    </div>
                   </td>
+
+                  {/* Delete button */}
                   <td className={cellClass}>
                     <button
                       onClick={() => removeItem(idx)}

@@ -1,5 +1,16 @@
 export type Language = 'sq' | 'en'
-export type ItemStatus = 'ok' | 'missing' | 'review' | 'ready' | 'draft'
+
+/**
+ * Tariff code status — strictly defined for customs correctness:
+ *
+ * 'confirmed' — user explicitly confirmed this code (safe to export)
+ * 'ok'        — came from high-confidence confirmed history (safe to export)
+ * 'review'    — auto-suggested by AI/keyword matching — MUST be reviewed
+ * 'missing'   — no code found at all — blocks final XML export
+ * 'ready'     — header-level: document is ready for export
+ * 'draft'     — exported as draft (some fields missing/unconfirmed)
+ */
+export type ItemStatus = 'ok' | 'missing' | 'review' | 'ready' | 'draft' | 'confirmed'
 
 export interface InvoiceItem {
   id: string
@@ -18,6 +29,11 @@ export interface InvoiceItem {
   customsRate: number
   vatRate: number
   status: ItemStatus
+  // Confirmation metadata
+  confirmedAt?: string        // ISO timestamp when user confirmed
+  confirmedBy?: string        // optional: declarant name
+  requiresMaterial?: boolean  // true = tariff code depends on material
+  materialNote?: string       // e.g. "Specify: metal / plastic / wood"
 }
 
 export interface AsycudaPosition {
@@ -118,6 +134,23 @@ export interface TariffRule {
   customsRate: number
   vatRate: number
   notes: string
+  confidence?: 'high' | 'medium' | 'low'   // how certain is this mapping
+  requiresMaterial?: boolean                 // code depends on material
+  materialNote?: string                      // question to ask user
+}
+
+/**
+ * Confirmed tariff code entry — stored in localStorage.
+ * Built up over time as users confirm codes for specific products.
+ */
+export interface ConfirmedTariffEntry {
+  keyword: string           // normalized product description (uppercase)
+  tariffCode: string
+  cdRate: number
+  vatRate: number
+  confirmedAt: string       // ISO timestamp
+  confirmedBy?: string
+  notes?: string
 }
 
 export interface GeneratedFiles {

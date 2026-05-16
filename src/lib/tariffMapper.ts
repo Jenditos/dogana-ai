@@ -164,3 +164,65 @@ export function saveTariffRules(rules: TariffRule[]): void {
   if (typeof window === 'undefined') return
   localStorage.setItem('dudi_tariff_rules', JSON.stringify(rules))
 }
+
+/* ── Confirmed codes store ────────────────────────────────────
+ * Grows over time as users confirm codes for specific products.
+ * Key: normalized description (uppercase, trimmed).
+ * Once confirmed, same product description → 'confirmed' status.
+ * ─────────────────────────────────────────────────────────── */
+const CONFIRMED_KEY = 'dudi_confirmed_tariffs'
+
+export interface ConfirmedEntry {
+  keyword: string
+  tariffCode: string
+  cdRate: number
+  vatRate: number
+  confirmedAt: string
+  confirmedBy?: string
+}
+
+export function getConfirmedTariffs(): ConfirmedEntry[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const stored = localStorage.getItem(CONFIRMED_KEY)
+    return stored ? JSON.parse(stored) : []
+  } catch { return [] }
+}
+
+export function getConfirmedCode(description: string): ConfirmedEntry | null {
+  const upper = description.toUpperCase().trim()
+  const confirmed = getConfirmedTariffs()
+  // Exact match first
+  let found = confirmed.find(e => e.keyword === upper)
+  // Partial match if no exact
+  if (!found) found = confirmed.find(e => upper.includes(e.keyword) || e.keyword.includes(upper))
+  return found || null
+}
+
+export function saveConfirmedCode(
+  description: string,
+  tariffCode: string,
+  cdRate: number,
+  vatRate: number,
+  confirmedBy?: string
+): void {
+  if (typeof window === 'undefined') return
+  const keyword = description.toUpperCase().trim()
+  const entries = getConfirmedTariffs()
+  const idx     = entries.findIndex(e => e.keyword === keyword)
+  const entry: ConfirmedEntry = {
+    keyword, tariffCode, cdRate, vatRate,
+    confirmedAt: new Date().toISOString(),
+    confirmedBy,
+  }
+  if (idx >= 0) entries[idx] = entry
+  else entries.push(entry)
+  localStorage.setItem(CONFIRMED_KEY, JSON.stringify(entries))
+}
+
+export function removeConfirmedCode(description: string): void {
+  if (typeof window === 'undefined') return
+  const keyword = description.toUpperCase().trim()
+  const entries = getConfirmedTariffs().filter(e => e.keyword !== keyword)
+  localStorage.setItem(CONFIRMED_KEY, JSON.stringify(entries))
+}

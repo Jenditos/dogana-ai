@@ -121,6 +121,13 @@ export default function ExportPanel({ lang, header, items, positions, missingFie
 
   const hasData = items.length > 0 || positions.length > 0
 
+  // Tariff code status counts — drives export blocking
+  const missingCodeCount    = items.filter(i => !i.tariffCode || i.status === 'missing').length
+  const reviewCodeCount     = items.filter(i => i.status === 'review').length
+  const confirmedCodeCount  = items.filter(i => i.status === 'confirmed' || i.status === 'ok').length
+  const tariffBlocksExport  = missingCodeCount > 0
+  const tariffNeedsReview   = reviewCodeCount > 0
+
   /* ── Inline SVG icons ── */
   const IcoGenerate = () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -355,36 +362,116 @@ export default function ExportPanel({ lang, header, items, positions, missingFie
         </div>
       )}
 
+      {/* ── Tariff Code Status Panel ── */}
+      {hasData && (
+        <div style={{
+          border: `1.5px solid ${tariffBlocksExport ? 'var(--red-bdr)' : tariffNeedsReview ? 'var(--amber-bdr)' : 'var(--green-bdr)'}`,
+          borderRadius: 14, overflow: 'hidden',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '10px 16px', flexWrap: 'wrap', gap: 10,
+            background: tariffBlocksExport ? 'var(--red-bg)' : tariffNeedsReview ? 'var(--amber-bg)' : 'var(--green-bg)',
+          }}>
+            <span style={{
+              fontSize: 13, fontWeight: 700,
+              color: tariffBlocksExport ? 'var(--red)' : tariffNeedsReview ? 'var(--amber)' : 'var(--green)',
+              display: 'flex', alignItems: 'center', gap: 7,
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              {sq ? 'Kodi tarifor' : 'Tariff code status'}
+            </span>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {[
+                { count: confirmedCodeCount, label: sq ? 'I konfirmuar' : 'Confirmed', color: 'var(--green)', bg: 'var(--green-bg)', border: 'var(--green-bdr)' },
+                { count: reviewCodeCount,    label: sq ? 'Për kontroll' : 'Review',    color: 'var(--amber)', bg: 'var(--amber-bg)', border: 'var(--amber-bdr)' },
+                { count: missingCodeCount,   label: sq ? 'Mungon' : 'Missing',         color: 'var(--red)',   bg: 'var(--red-bg)',   border: 'var(--red-bdr)' },
+              ].map(({ count, label, color, bg, border }) => (
+                <span key={label} style={{
+                  display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700,
+                  padding: '3px 10px', borderRadius: 99,
+                  background: bg, color, border: `1px solid ${border}`,
+                  opacity: count === 0 ? .45 : 1,
+                }}>
+                  {count} {label}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Blocking message */}
+          {tariffBlocksExport && (
+            <div style={{ padding: '10px 16px', background: 'var(--red-bg)', borderTop: '1px solid var(--red-bdr)' }}>
+              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--red)' }}>
+                {sq
+                  ? `Ka ${missingCodeCount} pozicione pa kod tarifor. XML final nuk mund të krijohet.`
+                  : `${missingCodeCount} item(s) have no tariff code. Final XML cannot be generated.`}
+              </p>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--t3)' }}>
+                {sq ? 'Shko te tabela e rreshtave dhe shto kodet qe mungojnë.' : 'Go to the invoice rows table and add the missing codes.'}
+              </p>
+            </div>
+          )}
+
+          {/* Warning for unconfirmed */}
+          {!tariffBlocksExport && tariffNeedsReview && (
+            <div style={{ padding: '10px 16px', background: 'var(--amber-bg)', borderTop: '1px solid var(--amber-bdr)' }}>
+              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--amber)' }}>
+                {sq
+                  ? `Ka ${reviewCodeCount} kode tarifore të propozuara që duhet të kontrollohen.`
+                  : `${reviewCodeCount} tariff codes are auto-suggested and need review.`}
+              </p>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--t3)' }}>
+                {sq
+                  ? 'Mund të krijoni Draft ose të konfirmoni kodet para eksportit final.'
+                  : 'You can create a Draft or confirm codes before final export.'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Action buttons ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-        {/* Generate — blocked if sum validation has a blocking failure */}
-        <button
-          onClick={() => sumValidation.hasBlocker ? generateXml(true) : generateXml(false)}
-          disabled={!hasData || loading === 'xml'}
-          className="btn btn-primary"
-          style={{
-            width: '100%', height: 56, fontSize: 16, fontWeight: 700, borderRadius: 14, gap: 10,
-            background: sumValidation.hasBlocker ? 'var(--amber)' : undefined,
-            boxShadow: sumValidation.hasBlocker ? '0 1px 4px rgba(217,119,6,.4)' : undefined,
-          }}
-          title={sumValidation.hasBlocker
-            ? (sq ? 'Shumat nuk përputhen — do të gjenerohet Draft' : 'Sums do not match — will generate Draft')
-            : undefined}
-        >
-          {loading === 'xml'
-            ? <><IcoSpinner />{t(lang, 'messages.validating')}</>
-            : sumValidation.hasBlocker
-              ? <><IcoGenerate />{sq ? 'Gjenero Draft (shumat gabim)' : 'Generate Draft (sums wrong)'}</>
-              : <><IcoGenerate />{t(lang, 'buttons.generate')}</>}
-        </button>
-        {sumValidation.hasBlocker && (
-          <p style={{ margin: '-4px 0 0', fontSize: 11.5, color: 'var(--amber)', textAlign: 'center' }}>
-            {sq
-              ? 'Shumat nuk përputhen. XML do të shënohet si Draft derisa të korrigjohen rreshtat.'
-              : 'Sums do not match. XML will be marked as Draft until rows are corrected.'}
-          </p>
-        )}
+        {/* Generate — blocked by missing codes OR sum mismatch */}
+        {(() => {
+          const isBlocked   = tariffBlocksExport || sumValidation.hasBlocker
+          const isDraftMode = !tariffBlocksExport && (tariffNeedsReview || sumValidation.hasBlocker)
+          return (
+            <>
+              <button
+                onClick={() => isBlocked ? undefined : isDraftMode ? generateXml(true) : generateXml(false)}
+                disabled={!hasData || loading === 'xml' || tariffBlocksExport}
+                className="btn btn-primary"
+                style={{
+                  width: '100%', height: 56, fontSize: 16, fontWeight: 700, borderRadius: 14, gap: 10,
+                  background: tariffBlocksExport ? 'var(--red)' : isDraftMode ? 'var(--amber)' : undefined,
+                  boxShadow: tariffBlocksExport ? '0 1px 4px rgba(220,38,38,.35)' : isDraftMode ? '0 1px 4px rgba(217,119,6,.4)' : undefined,
+                  opacity: tariffBlocksExport ? .7 : 1,
+                  cursor: tariffBlocksExport ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {loading === 'xml'
+                  ? <><IcoSpinner />{t(lang, 'messages.validating')}</>
+                  : tariffBlocksExport
+                    ? <><IcoGenerate />{sq ? 'Kode tariforë mungojnë — nuk mund të eksportohet' : 'Tariff codes missing — cannot export'}</>
+                    : isDraftMode
+                      ? <><IcoGenerate />{sq ? 'Gjenero Draft' : 'Generate Draft'}</>
+                      : <><IcoGenerate />{t(lang, 'buttons.generate')}</>}
+              </button>
+              {isDraftMode && !tariffBlocksExport && (
+                <p style={{ margin: '-4px 0 0', fontSize: 11.5, color: 'var(--amber)', textAlign: 'center' }}>
+                  {sq
+                    ? 'Ka kode të pakonfirmuara ose shuma nuk përputhen. XML do të shënohet si Draft.'
+                    : 'Unconfirmed codes or sum mismatches present. XML will be marked as Draft.'}
+                </p>
+              )}
+            </>
+          )
+        })()}
 
         {/* Download row */}
         {xml && (

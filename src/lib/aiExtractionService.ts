@@ -1,5 +1,5 @@
 import type { ExtractionResult, InvoiceItem, HeaderData } from '@/types'
-import { findTariffByKeyword, getTariffRules } from './tariffMapper'
+import { findTariffByKeyword, getTariffRules, getConfirmedCode } from './tariffMapper'
 
 /* ── Albanian translation dictionary ────────────────────────── */
 const ALB: Record<string, string> = {
@@ -146,27 +146,59 @@ Return ONLY valid JSON: { "header": {...}, "items": [...] }`
 /* ── Build InvoiceItem array from AI response ────────────────── */
 function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<InvoiceItem>[] }): InvoiceItem[] {
   const rules = getTariffRules()
+
   return (parsed.items || []).map((item, idx) => {
-    const tariffRule = findTariffByKeyword(item.descriptionEn || '', rules)
+    const desc = item.descriptionEn || ''
+
+    // ── Priority 1: previously confirmed code (user-validated) ──
+    // getConfirmedCode only works client-side; returns null on server
+    const confirmed = typeof window !== 'undefined' ? getConfirmedCode(desc) : null
+    if (confirmed) {
+      return {
+        id: `item_${idx + 1}`,
+        itemNo:        item.itemNo || String(idx + 1),
+        descriptionEn: desc,
+        descriptionSq: translateToAlbanian(desc),
+        qty:         Number(item.qty)         || 0,
+        unit:        item.unit               || 'PCS',
+        unitPrice:   Number(item.unitPrice)   || 0,
+        totalValue:  Number(item.totalValue)  || 0,
+        packages:    Number(item.packages)    || 0,
+        grossWeight: Number(item.grossWeight) || 0,
+        netWeight:   Number(item.netWeight)   || 0,
+        volume:      Number(item.volume)      || 0,
+        tariffCode:  confirmed.tariffCode,
+        customsRate: confirmed.cdRate,
+        vatRate:     confirmed.vatRate,
+        status:      'confirmed',          // user already confirmed this code
+        confirmedAt: confirmed.confirmedAt,
+      }
+    }
+
+    // ── Priority 2: auto-matched from keyword table ──
+    const tariffRule = findTariffByKeyword(desc, rules)
+
     return {
       id: `item_${idx + 1}`,
-      itemNo:        item.itemNo        || String(idx + 1),
-      descriptionEn: item.descriptionEn || '',
-      descriptionSq: translateToAlbanian(item.descriptionEn || ''),
-      qty:           Number(item.qty)         || 0,
-      unit:          item.unit               || 'PCS',
-      unitPrice:     Number(item.unitPrice)   || 0,
-      totalValue:    Number(item.totalValue)  || 0,
-      packages:      Number(item.packages)    || 0,
-      grossWeight:   Number(item.grossWeight) || 0,
-      netWeight:     Number(item.netWeight)   || 0,
-      volume:        Number(item.volume)      || 0,
-      tariffCode:    tariffRule?.tariffCode   || '',
-      customsRate:   tariffRule?.customsRate  ?? 10,
-      vatRate:       tariffRule?.vatRate      ?? 18,
-      // review = code was auto-suggested, needs human confirmation
-      // missing = no code found at all, must be added
-      status:        tariffRule ? 'review' : 'missing',
+      itemNo:        item.itemNo || String(idx + 1),
+      descriptionEn: desc,
+      descriptionSq: translateToAlbanian(desc),
+      qty:         Number(item.qty)         || 0,
+      unit:        item.unit               || 'PCS',
+      unitPrice:   Number(item.unitPrice)   || 0,
+      totalValue:  Number(item.totalValue)  || 0,
+      packages:    Number(item.packages)    || 0,
+      grossWeight: Number(item.grossWeight) || 0,
+      netWeight:   Number(item.netWeight)   || 0,
+      volume:      Number(item.volume)      || 0,
+      tariffCode:  tariffRule?.tariffCode   || '',
+      customsRate: tariffRule?.customsRate  ?? 10,
+      vatRate:     tariffRule?.vatRate      ?? 18,
+      requiresMaterial: tariffRule?.requiresMaterial,
+      materialNote:     tariffRule?.materialNote,
+      // 'review' = auto-suggested, must be reviewed by user
+      // 'missing' = no code found at all, blocks final export
+      status: tariffRule ? 'review' : 'missing',
     }
   })
 }
