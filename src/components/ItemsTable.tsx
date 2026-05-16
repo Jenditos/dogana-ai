@@ -79,6 +79,48 @@ function isValidTariffCode(code: string): boolean {
   return true
 }
 
+/* ── Row issue computation ───────────────────────────────────── */
+// Checks ALL mandatory fields for a row and returns the composite worst status.
+// Priority: missing > review > confirmed > ok
+interface RowIssue {
+  field: string   // field name key
+  labelSq: string
+  labelEn: string
+  type: 'missing' | 'review'
+}
+
+function computeRowIssues(item: InvoiceItem, packingListFound: boolean): RowIssue[] {
+  const issues: RowIssue[] = []
+
+  if (!item.qty || item.qty === 0) {
+    issues.push({ field: 'qty', labelSq: 'Sasia mungon', labelEn: 'Quantity missing', type: 'missing' })
+  }
+  if (!item.totalValue || item.totalValue === 0) {
+    issues.push({ field: 'totalValue', labelSq: 'Vlera totale mungon', labelEn: 'Total value missing', type: 'missing' })
+  }
+  if (!item.tariffCode) {
+    issues.push({ field: 'tariffCode', labelSq: 'Kodi tarifor mungon', labelEn: 'Tariff code missing', type: 'missing' })
+  } else if (item.status === 'review') {
+    issues.push({ field: 'tariffCode', labelSq: 'Kodi tarifor për kontroll', labelEn: 'Tariff code needs review', type: 'review' })
+  }
+  // Only flag weight if packing list was found (otherwise we'd always show it for image-only PDFs)
+  if (packingListFound && (!item.grossWeight || item.grossWeight === 0)) {
+    issues.push({ field: 'grossWeight', labelSq: 'Pesha bruto mungon', labelEn: 'Gross weight missing', type: 'missing' })
+  }
+  if (packingListFound && (!item.packages || item.packages === 0)) {
+    issues.push({ field: 'packages', labelSq: 'Paketime mungojnë', labelEn: 'Packages missing', type: 'missing' })
+  }
+
+  return issues
+}
+
+function getCompositeStatus(item: InvoiceItem, issues: RowIssue[]): 'missing' | 'review' | 'confirmed' | 'ok' {
+  if (issues.some(i => i.type === 'missing')) return 'missing'
+  if (issues.some(i => i.type === 'review'))  return 'review'
+  if (item.status === 'confirmed')             return 'confirmed'
+  return 'ok'
+}
+
 /* ── Bulk Confirm Dialog ─────────────────────────────────────── */
 interface BulkDialogProps {
   lang: Language
@@ -164,26 +206,39 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
 
   // Filter state
   type FilterType = 'all' | 'missing' | 'review' | 'confirmed'
-  const [filterStatus, setFilterStatus]   = useState<FilterType>('all')
-  const [showDialog, setShowDialog]       = useState(false)
-  const [successMsg, setSuccessMsg]       = useState('')
+  const [filterStatus, setFilterStatus] = useState<FilterType>('all')
+  const [showDialog, setShowDialog]     = useState(false)
+  const [successMsg, setSuccessMsg]     = useState('')
 
-  // Counts for toolbar
-  const missingCount   = items.filter(i => i.status === 'missing' || !i.tariffCode).length
-  const reviewCount    = items.filter(i => i.status === 'review').length
-  const confirmedCount = items.filter(i => i.status === 'confirmed' || i.status === 'ok').length
+  // Detect if packing list was found (any item has weight > 0)
+  const packingListFound = items.some(i => i.grossWeight > 0)
+
+  // Compute row issues for ALL items once
+  const rowIssuesMap = Object.fromEntries(
+    items.map(item => [item.id, computeRowIssues(item, packingListFound)])
+  )
+
+  // Composite status per row (reflects ALL field issues, not just tariffCode)
+  const compositeStatus = (item: InvoiceItem) =>
+    getCompositeStatus(item, rowIssuesMap[item.id] || [])
+
+  // Counts for toolbar — use composite status
+  const missingCount   = items.filter(i => compositeStatus(i) === 'missing').length
+  const reviewCount    = items.filter(i => compositeStatus(i) === 'review').length
+  const confirmedCount = items.filter(i => compositeStatus(i) === 'confirmed' || compositeStatus(i) === 'ok').length
 
   // Bulk confirm stats (preview for dialog)
   const bulkToConfirm  = items.filter(i => i.status === 'review' && isValidTariffCode(i.tariffCode) && i.descriptionEn).length
   const bulkMissing    = items.filter(i => !i.tariffCode || i.status === 'missing').length
   const bulkInvalid    = items.filter(i => i.status === 'review' && !isValidTariffCode(i.tariffCode)).length
 
-  // Filtered items for display
+  // Filtered items for display — use composite status
   const displayItems = items.map((item, idx) => ({ item, idx })).filter(({ item }) => {
     if (filterStatus === 'all') return true
-    if (filterStatus === 'missing') return item.status === 'missing' || !item.tariffCode
-    if (filterStatus === 'review') return item.status === 'review'
-    if (filterStatus === 'confirmed') return item.status === 'confirmed' || item.status === 'ok'
+    const cs = compositeStatus(item)
+    if (filterStatus === 'missing') return cs === 'missing'
+    if (filterStatus === 'review')  return cs === 'review'
+    if (filterStatus === 'confirmed') return cs === 'confirmed' || cs === 'ok'
     return true
   })
 
@@ -355,7 +410,23 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {displayItems.map(({ item, idx }) => {
-              const rowBg = item.status === 'missing' ? 'bg-red-50' : item.status === 'review' ? 'bg-yellow-50' : ''
+              const issues     = rowIssuesMap[item.id] || []
+              const cs         = getCompositeStatus(item, issues)
+              const missingIss = issues.filter(i => i.type === 'missing')
+              const reviewIss  = issues.filter(i => i.type === 'review')
+
+              // Row background — driven by COMPOSITE status, not just tariff code status
+              const rowBg = cs === 'missing' ? 'bg-red-50'
+                          : cs === 'review'  ? 'bg-yellow-50'
+                          : ''
+
+              // Helper: red border on a cell if that field is in missing issues
+              const cellHasIssue = (field: string) => issues.some(i => i.field === field)
+              const issueBorder  = (field: string) =>
+                cellHasIssue(field)
+                  ? '1.5px solid var(--red)'
+                  : ''
+
               return (
                 <tr key={item.id} className={rowBg}>
                   <td className={cellClass + ' font-medium text-gray-500'}>{idx + 1}</td>
@@ -384,6 +455,8 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                     <input
                       type="number"
                       className={numInputClass}
+                      style={{ outline: issueBorder('qty') }}
+                      title={cellHasIssue('qty') ? (sq ? 'Sasia mungon' : 'Quantity missing') : undefined}
                       value={item.qty}
                       onChange={e => updateItem(idx, 'qty', parseFloat(e.target.value) || 0)}
                     />
@@ -407,6 +480,8 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                     <input
                       type="number"
                       className={numInputClass}
+                      style={{ outline: issueBorder('totalValue') }}
+                      title={cellHasIssue('totalValue') ? (sq ? 'Vlera totale mungon' : 'Total value missing') : undefined}
                       value={item.totalValue}
                       onChange={e => updateItem(idx, 'totalValue', parseFloat(e.target.value) || 0)}
                     />
@@ -415,6 +490,8 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                     <input
                       type="number"
                       className={numInputClass}
+                      style={{ outline: issueBorder('packages') }}
+                      title={cellHasIssue('packages') ? (sq ? 'Paketime mungojnë' : 'Packages missing') : undefined}
                       value={item.packages}
                       onChange={e => updateItem(idx, 'packages', parseInt(e.target.value) || 0)}
                     />
@@ -423,6 +500,8 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                     <input
                       type="number"
                       className={numInputClass}
+                      style={{ outline: issueBorder('grossWeight') }}
+                      title={cellHasIssue('grossWeight') ? (sq ? 'Pesha bruto mungon' : 'Gross weight missing') : undefined}
                       value={item.grossWeight}
                       onChange={e => updateItem(idx, 'grossWeight', parseFloat(e.target.value) || 0)}
                     />
@@ -438,31 +517,43 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                   <td className={cellClass}>
                     <input
                       className={inputClass + ' w-28'}
+                      style={{ outline: issueBorder('tariffCode') }}
+                      title={cellHasIssue('tariffCode') ? (sq ? 'Kodi tarifor mungon' : 'Tariff code missing') : undefined}
                       value={item.tariffCode}
                       onChange={e => updateItem(idx, 'tariffCode', e.target.value)}
                       placeholder="0000000000"
                     />
                   </td>
                   <td className={cellClass}>
-                    <input
-                      type="number"
-                      className={numInputClass + ' w-16'}
-                      value={item.customsRate}
-                      onChange={e => updateItem(idx, 'customsRate', parseFloat(e.target.value) || 0)}
-                    />
+                    <input type="number" className={numInputClass + ' w-16'} value={item.customsRate}
+                      onChange={e => updateItem(idx, 'customsRate', parseFloat(e.target.value) || 0)} />
                   </td>
                   <td className={cellClass}>
-                    <input
-                      type="number"
-                      className={numInputClass + ' w-16'}
-                      value={item.vatRate}
-                      onChange={e => updateItem(idx, 'vatRate', parseFloat(e.target.value) || 0)}
-                    />
+                    <input type="number" className={numInputClass + ' w-16'} value={item.vatRate}
+                      onChange={e => updateItem(idx, 'vatRate', parseFloat(e.target.value) || 0)} />
                   </td>
-                  {/* Status + Confirm button */}
+
+                  {/* Status + Issue summary + Confirm button */}
                   <td className={cellClass} style={{ verticalAlign: 'middle' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                      <StatusBadge status={item.status} lang={lang} />
+                      {/* Composite status badge (reflects ALL field issues) */}
+                      <StatusBadge status={cs} lang={lang} />
+
+                      {/* Issue summary badge */}
+                      {(missingIss.length > 0 || reviewIss.length > 0) && (
+                        <span style={{
+                          fontSize: 10.5, lineHeight: 1.3,
+                          color: missingIss.length > 0 ? 'var(--red)' : 'var(--amber)',
+                          display: 'flex', flexDirection: 'column', gap: 1,
+                        }}>
+                          {missingIss.length > 0 && (
+                            <span>{missingIss.length} {sq ? (missingIss.length === 1 ? 'fushë mungon' : 'fusha mungojnë') : (missingIss.length === 1 ? 'field missing' : 'fields missing')}</span>
+                          )}
+                          {reviewIss.length > 0 && missingIss.length === 0 && (
+                            <span>{reviewIss.length} {sq ? 'për kontroll' : 'to review'}</span>
+                          )}
+                        </span>
+                      )}
 
                       {/* Confirm button: show for 'review' items that have a code */}
                       {item.status === 'review' && item.tariffCode && (
