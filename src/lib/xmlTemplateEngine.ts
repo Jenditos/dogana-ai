@@ -36,7 +36,8 @@ function sanitize(value: string | number | undefined, ascii = false): string {
 
 function num(value: number | undefined): string {
   if (value === undefined || value === null) return '0.00'
-  return Number(value).toFixed(2)
+  const n = Number(value)
+  return Number.isFinite(n) ? n.toFixed(2) : '0.00'
 }
 
 function generateItemsXml(
@@ -47,23 +48,23 @@ function generateItemsXml(
   const itemTemplate = fs.readFileSync(ITEM_TEMPLATE_PATH, 'utf-8')
   const ascii = settings.useAsciiForAsycuda
 
-  return positions.map((pos, idx) => {
-    const cdRate = pos.customsRate || 10
-    const vtRate = pos.vatRate || 18
+  return positions.map((pos) => {
+    const cdRate = Number.isFinite(pos.customsRate) ? pos.customsRate : 0
+    const vtRate = Number.isFinite(pos.vatRate) ? pos.vatRate : 0
     const cif = pos.totalValue
     const cdAmount = parseFloat(num(cif * cdRate / 100))
     const vtBase = cif + cdAmount
     const vtAmount = parseFloat(num(vtBase * vtRate / 100))
     const totalTax = parseFloat(num(cdAmount + vtAmount))
-    const totalInvoice = header.totalInvoice || 1
-    const alphaCoef = cif / totalInvoice
+    const totalInvoice = Number(header.totalInvoice)
+    const alphaCoef = Number.isFinite(totalInvoice) && totalInvoice > 0 ? cif / totalInvoice : 0
 
     const descAlb = ascii ? applyAsciiMode(pos.descriptionSq) : pos.descriptionSq
     const descEng = pos.descriptionEn
 
     let item = itemTemplate
-    item = item.replace(/{{ITEM_PACKAGES}}/g, String(pos.packages || 1))
-    item = item.replace(/{{ITEM_INCOTERM_CODE}}/g, sanitize(header.incoterm?.split(' ')[0] || 'FOB'))
+    item = item.replace(/{{ITEM_PACKAGES}}/g, String(pos.packages || 0))
+    item = item.replace(/{{ITEM_INCOTERM_CODE}}/g, sanitize(header.incoterm?.split(' ')[0] || ''))
     item = item.replace(/{{ITEM_INCOTERM_PLACE}}/g, sanitize(header.portOfLoading || ''))
     item = item.replace(/{{ITEM_COMMODITY_CODE}}/g, sanitize(pos.tariffCode))
     item = item.replace(/{{ITEM_SUPP_UNIT_CODE}}/g, sanitize(pos.unit || 'PCS'))
@@ -71,7 +72,7 @@ function generateItemsXml(
     item = item.replace(/{{ITEM_SUPP_UNIT_QTY}}/g, String(pos.totalQty || 0))
     item = item.replace(/{{ITEM_PRICE}}/g, num(cif))
     item = item.replace(/{{ITEM_INVOICE_REF}}/g, sanitize(header.invoiceNumber))
-    item = item.replace(/{{ITEM_ORIGIN_CODE}}/g, sanitize(header.countryOfOrigin || 'CN'))
+    item = item.replace(/{{ITEM_ORIGIN_CODE}}/g, sanitize(header.countryOfOrigin || ''))
     item = item.replace(/{{ITEM_DESC_ALBANIAN}}/g, sanitize(descAlb, false))
     item = item.replace(/{{ITEM_DESC_ENGLISH}}/g, sanitize(descEng))
     item = item.replace(/{{ITEM_QTY}}/g, String(pos.totalQty || 0))
@@ -89,7 +90,7 @@ function generateItemsXml(
     item = item.replace(/{{ITEM_NET_WEIGHT}}/g, num(pos.netWeight))
     item = item.replace(/{{ITEM_STATISTICAL_VALUE}}/g, num(cif))
     item = item.replace(/{{ITEM_ALPHA_COEF}}/g, String(alphaCoef.toFixed(15)))
-    item = item.replace(/{{CURRENCY}}/g, sanitize(header.currency || 'EUR'))
+    item = item.replace(/{{CURRENCY}}/g, sanitize(header.currency || ''))
 
     return item
   }).join('\n')
@@ -134,16 +135,16 @@ export function generateXml(
   xml = xml.replace('{{FINANCIAL_NAME}}', sanitize(header.importerName, ascii))
   xml = xml.replace('{{DECLARANT_CODE}}', sanitize(settings.declarantCode || ''))
   xml = xml.replace('{{DECLARANT_NAME}}', sanitize(settings.declarantName || '', ascii))
-  xml = xml.replace('{{EXPORT_COUNTRY_CODE}}', sanitize(header.countryOfExport || 'CN'))
-  xml = xml.replace('{{EXPORT_COUNTRY_NAME}}', sanitize(header.countryOfExport || 'KINA', ascii))
-  xml = xml.replace('{{DESTINATION_COUNTRY_CODE}}', sanitize(header.countryOfDestination || 'XK'))
-  xml = xml.replace('{{DESTINATION_COUNTRY_NAME}}', sanitize(header.countryOfDestination || 'KOSOVE', ascii))
-  xml = xml.replace('{{COUNTRY_OF_ORIGIN_NAME}}', sanitize(header.countryOfOrigin || 'CN'))
+  xml = xml.replace('{{EXPORT_COUNTRY_CODE}}', sanitize(header.countryOfExport || ''))
+  xml = xml.replace('{{EXPORT_COUNTRY_NAME}}', sanitize(header.countryOfExport || '', ascii))
+  xml = xml.replace('{{DESTINATION_COUNTRY_CODE}}', sanitize(header.countryOfDestination || ''))
+  xml = xml.replace('{{DESTINATION_COUNTRY_NAME}}', sanitize(header.countryOfDestination || '', ascii))
+  xml = xml.replace('{{COUNTRY_OF_ORIGIN_NAME}}', sanitize(header.countryOfOrigin || ''))
   xml = xml.replace('{{COMMENTS_FREE_TEXT}}', sanitize(commentsText, ascii))
-  xml = xml.replace('{{TRANSPORT_IDENTITY}}', sanitize(header.transportIdentity || 'XXX'))
-  xml = xml.replace('{{TRANSPORT_BORDER_IDENTITY}}', sanitize(header.transportIdentity || 'XXX'))
+  xml = xml.replace('{{TRANSPORT_IDENTITY}}', sanitize(header.transportIdentity || ''))
+  xml = xml.replace('{{TRANSPORT_BORDER_IDENTITY}}', sanitize(header.transportIdentity || ''))
   xml = xml.replace('{{INLAND_TRANSPORT_CODE}}', '1')
-  xml = xml.replace('{{INCOTERM_CODE}}', sanitize(header.incoterm?.split(' ')[0] || 'FOB'))
+  xml = xml.replace('{{INCOTERM_CODE}}', sanitize(header.incoterm?.split(' ')[0] || ''))
   xml = xml.replace('{{INCOTERM_PLACE}}', sanitize(header.portOfLoading || ''))
   xml = xml.replace('{{ITEMS}}', itemsXml)
 

@@ -121,86 +121,6 @@ function getCompositeStatus(item: InvoiceItem, issues: RowIssue[]): 'missing' | 
   return 'ok'
 }
 
-/* ── Bulk Confirm Dialog ─────────────────────────────────────── */
-interface BulkDialogProps {
-  lang: Language
-  toConfirm: number
-  missing: number
-  invalid: number
-  onCancel: () => void
-  onConfirm: () => void
-}
-function BulkConfirmDialog({ lang, toConfirm, missing, invalid, onCancel, onConfirm }: BulkDialogProps) {
-  const sq = lang === 'sq'
-  return (
-    <div onClick={e => { if (e.target === e.currentTarget) onCancel() }} style={{
-      position: 'fixed', inset: 0, zIndex: 60,
-      background: 'rgba(15,23,42,.55)', backdropFilter: 'blur(6px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
-    }}>
-      <div className="a-scale-in" style={{
-        width: '100%', maxWidth: 460,
-        background: 'var(--surface)', borderRadius: 18,
-        border: '1px solid var(--border)', boxShadow: 'var(--sh-xl)',
-        overflow: 'hidden',
-      }}>
-        {/* Header */}
-        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)' }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--t1)' }}>
-            {sq ? 'Konfirmo kodet e propozuara?' : 'Confirm proposed codes?'}
-          </h3>
-          <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--t3)', lineHeight: 1.5 }}>
-            {sq
-              ? 'Do të konfirmohen vetëm kodet tarifore me status "Për kontroll" që janë të vlefshme. Kodet që mungojnë ose janë të pavlefshme nuk do të konfirmohen.'
-              : 'Only tariff codes with status "Review" that are valid will be confirmed. Missing or invalid codes will not be affected.'}
-          </p>
-        </div>
-
-        {/* Stats */}
-        <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[
-            { label: sq ? 'Kode për konfirmim' : 'Codes to confirm', value: toConfirm, color: 'var(--green)', ok: true },
-            { label: sq ? 'Kode që mungojnë (nuk preken)' : 'Missing codes (not affected)', value: missing, color: 'var(--red)', ok: false },
-            { label: sq ? 'Kode të pavlefshme (nuk preken)' : 'Invalid codes (not affected)', value: invalid, color: 'var(--amber)', ok: false },
-          ].map(({ label, value, color, ok }) => (
-            <div key={label} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '9px 14px', borderRadius: 10,
-              background: ok ? 'var(--green-bg)' : 'var(--surface-2)',
-              border: `1px solid ${ok ? 'var(--green-bdr)' : 'var(--border)'}`,
-            }}>
-              <span style={{ fontSize: 13, color: 'var(--t2)', fontWeight: ok ? 600 : 400 }}>{label}</span>
-              <span style={{ fontSize: 15, fontWeight: 800, color }}>{value}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Actions */}
-        <div style={{
-          padding: '14px 24px 20px',
-          display: 'flex', justifyContent: 'flex-end', gap: 10,
-          borderTop: '1px solid var(--border)', background: 'var(--surface-2)',
-        }}>
-          <button onClick={onCancel} className="btn btn-ghost" style={{ height: 40 }}>
-            {sq ? 'Anulo' : 'Cancel'}
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={toConfirm === 0}
-            className="btn btn-primary"
-            style={{ height: 40, gap: 7, opacity: toConfirm === 0 ? .5 : 1 }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            {sq ? `Konfirmo të gjitha (${toConfirm})` : `Confirm all (${toConfirm})`}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function ItemsTable({ lang, items, onChange }: Props) {
   const sq = lang === 'sq'
 
@@ -211,7 +131,6 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
   // Filter state
   type FilterType = 'all' | 'missing' | 'review' | 'confirmed'
   const [filterStatus, setFilterStatus] = useState<FilterType>('all')
-  const [showDialog, setShowDialog]     = useState(false)
   const [successMsg, setSuccessMsg]     = useState('')
 
   // Detect if packing list was found (any item has weight > 0)
@@ -231,11 +150,6 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
   const reviewCount    = items.filter(i => compositeStatus(i) === 'review').length
   const confirmedCount = items.filter(i => compositeStatus(i) === 'confirmed' || compositeStatus(i) === 'ok').length
 
-  // Bulk confirm stats (preview for dialog)
-  const bulkToConfirm  = items.filter(i => i.status === 'review' && isValidTariffCode(i.tariffCode) && i.descriptionEn).length
-  const bulkMissing    = items.filter(i => !i.tariffCode || i.status === 'missing').length
-  const bulkInvalid    = items.filter(i => i.status === 'review' && !isValidTariffCode(i.tariffCode)).length
-
   // Filtered items for display — use composite status
   const displayItems = items.map((item, idx) => ({ item, idx })).filter(({ item }) => {
     if (filterStatus === 'all') return true
@@ -250,9 +164,18 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
     const updated = items.map((item, i) => {
       if (i !== idx) return item
       const newItem = { ...item, [key]: value }
-      // If tariffCode was changed on a confirmed item → revert to review
+      if (key === 'tariffCode') {
+        const code = String(value ?? '').replace(/\s/g, '')
+        newItem.tariffCode = code
+        if (!isValidTariffCode(code)) {
+          newItem.status = 'missing'
+          newItem.confirmedAt = undefined
+        } else if (code !== item.tariffCode || item.status === 'missing') {
+          newItem.status = 'review'
+          newItem.confirmedAt = undefined
+        }
+      }
       if (key === 'tariffCode' && item.status === 'confirmed' && value !== item.tariffCode) {
-        newItem.status = 'review'
         newItem.confirmedAt = undefined
       }
       return newItem
@@ -268,6 +191,8 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
       ? { ...it, status: 'confirmed' as const, confirmedAt: new Date().toISOString() }
       : it
     ))
+    setSuccessMsg(sq ? 'Kodi tarifor u konfirmua.' : 'Tariff code confirmed.')
+    setTimeout(() => setSuccessMsg(''), 3000)
   }
 
   const unconfirmCode = (idx: number) => {
@@ -275,23 +200,8 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
       ? { ...it, status: 'review' as const, confirmedAt: undefined }
       : it
     ))
-  }
-
-  const bulkConfirm = () => {
-    const now = new Date().toISOString()
-    let count = 0
-    const updated = items.map(it => {
-      if (it.status === 'review' && isValidTariffCode(it.tariffCode) && it.descriptionEn) {
-        saveConfirmedCode(it.descriptionEn, it.tariffCode, it.customsRate, it.vatRate)
-        count++
-        return { ...it, status: 'confirmed' as const, confirmedAt: now }
-      }
-      return it
-    })
-    onChange(updated)
-    setShowDialog(false)
-    setSuccessMsg(sq ? `${count} kode tarifore u konfirmuan me sukses.` : `${count} tariff codes confirmed successfully.`)
-    setTimeout(() => setSuccessMsg(''), 4000)
+    setSuccessMsg(sq ? 'Kodi tarifor u kthye për kontroll.' : 'Tariff code moved back to review.')
+    setTimeout(() => setSuccessMsg(''), 3000)
   }
 
   const addItem = () => {
@@ -314,7 +224,7 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-      {/* ── Toolbar: filters + bulk confirm ── */}
+      {/* ── Toolbar: filters + view mode ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
 
         {/* Filter tabs */}
@@ -409,7 +319,7 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
               <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">{t(lang, 'table.tariffCode')}</th>
               {viewMode === 'pro' && <th className="px-3 py-3 text-right font-semibold text-gray-600">{t(lang, 'table.customsRate')}</th>}
               {viewMode === 'pro' && <th className="px-3 py-3 text-right font-semibold text-gray-600">{t(lang, 'table.vatRate')}</th>}
-              <th className="px-3 py-3 text-left font-semibold text-gray-600" style={{ width: viewMode === 'simple' ? 160 : undefined }}>{t(lang, 'table.status')}</th>
+              <th className="px-3 py-3 text-left font-semibold text-gray-600" style={{ width: viewMode === 'simple' ? 240 : undefined }}>{t(lang, 'table.status')}</th>
               {/* No empty header — delete moved into status cell */}
             </tr>
           </thead>
@@ -417,9 +327,6 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
             {displayItems.map(({ item, idx }) => {
               const issues     = rowIssuesMap[item.id] || []
               const cs         = getCompositeStatus(item, issues)
-              const missingIss = issues.filter(i => i.type === 'missing')
-              const reviewIss  = issues.filter(i => i.type === 'review')
-
               // Row background — driven by COMPOSITE status, not just tariff code status
               const rowBg = cs === 'missing' ? 'bg-red-50'
                           : cs === 'review'  ? 'bg-yellow-50'
@@ -436,6 +343,7 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
               }
 
               const pro = viewMode === 'pro'
+              const canConfirmTariff = item.status === 'review' && isValidTariffCode(item.tariffCode)
               return (
                 <tr key={item.id} className={rowBg}>
                   <td className={cellClass + ' font-medium text-gray-500'}>{idx + 1}</td>
@@ -504,10 +412,36 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                   {pro && <td className={cellClass}><input type="number" className={numInputClass + ' w-16'} value={item.customsRate} onChange={e => updateItem(idx, 'customsRate', parseFloat(e.target.value) || 0)} /></td>}
                   {pro && <td className={cellClass}><input type="number" className={numInputClass + ' w-16'} value={item.vatRate} onChange={e => updateItem(idx, 'vatRate', parseFloat(e.target.value) || 0)} /></td>}
 
-                  {/* Status + delete — no per-row confirm button */}
+                  {/* Status + explicit per-row tariff confirmation */}
                   <td className={cellClass} style={{ verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <StatusBadge status={cs} lang={lang} />
+                      {canConfirmTariff && (
+                        <button
+                          onClick={() => confirmCode(idx)}
+                          title={sq ? 'Konfirmo këtë kod pas kontrollit manual' : 'Confirm this code after manual review'}
+                          style={{
+                            height: 24, padding: '0 9px', borderRadius: 7,
+                            border: '1px solid var(--green-bdr)', background: 'var(--green-bg)',
+                            color: 'var(--green)', cursor: 'pointer', fontSize: 11.5, fontWeight: 800,
+                          }}
+                        >
+                          {sq ? 'Konfirmo' : 'Confirm'}
+                        </button>
+                      )}
+                      {item.status === 'confirmed' && (
+                        <button
+                          onClick={() => unconfirmCode(idx)}
+                          title={sq ? 'Kthe kodin për kontroll' : 'Move code back to review'}
+                          style={{
+                            width: 24, height: 24, borderRadius: 7,
+                            border: '1px solid var(--amber-bdr)', background: 'var(--amber-bg)',
+                            color: 'var(--amber)', cursor: 'pointer', fontSize: 13, fontWeight: 800,
+                          }}
+                        >
+                          ↺
+                        </button>
+                      )}
                       <button onClick={() => removeItem(idx)}
                         style={{
                           width: 24, height: 24, borderRadius: 6, border: '1px solid var(--border)',
@@ -561,20 +495,21 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
         </table>
       </div>
 
-      {/* Bulk confirm — below table, only when review codes exist */}
+      {/* Review hint — confirmation is intentionally per row for customs safety */}
       {reviewCount > 0 && (
-        <button
-          onClick={() => setShowDialog(true)}
-          className="btn btn-primary"
-          style={{ width: '100%', height: 46, fontSize: 14, gap: 8, background: 'var(--green)', boxShadow: '0 1px 4px rgba(5,150,105,.3)', borderRadius: 12 }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#047857' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'var(--green)' }}
-        >
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 14px', borderRadius: 12,
+          background: 'var(--amber-bg)', border: '1px solid var(--amber-bdr)',
+          color: 'var(--amber)', fontSize: 12.5, fontWeight: 700,
+        }}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
-          {sq ? `Konfirmo të gjitha kodet e propozuara (${reviewCount})` : `Confirm all proposed codes (${reviewCount})`}
-        </button>
+          {sq
+            ? `${reviewCount} kode duhen kontrolluar një nga një para eksportit final.`
+            : `${reviewCount} codes need one-by-one review before final export.`}
+        </div>
       )}
 
       <button
@@ -584,17 +519,6 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
         + {t(lang, 'buttons.addItem')}
       </button>
 
-      {/* Bulk Confirm Dialog */}
-      {showDialog && (
-        <BulkConfirmDialog
-          lang={lang}
-          toConfirm={bulkToConfirm}
-          missing={bulkMissing}
-          invalid={bulkInvalid}
-          onCancel={() => setShowDialog(false)}
-          onConfirm={bulkConfirm}
-        />
-      )}
     </div>
   )
 }

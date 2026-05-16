@@ -1,12 +1,6 @@
 import * as XLSX from 'xlsx'
 import type { HeaderData, InvoiceItem, AsycudaPosition, MissingField } from '@/types'
 
-function applyStyles(ws: XLSX.WorkSheet, headerRow: number, dataRowCount: number): void {
-  // xlsx-js does not support rich styles without xlsx-style, but we set column widths
-  const cols = Object.keys(ws).filter(k => k.match(/^[A-Z]+1$/))
-  ws['!cols'] = cols.map(() => ({ wch: 20 }))
-}
-
 export function generateExcel(
   header: HeaderData,
   items: InvoiceItem[],

@@ -14,13 +14,64 @@ interface Props {
   onStatusChange: (status: string) => void
 }
 
-const STATUS_COLORS = {
-  ready: 'text-green-600 bg-green-50 border-green-200',
-  review: 'text-yellow-700 bg-yellow-50 border-yellow-200',
-  draft: 'text-gray-600 bg-gray-50 border-gray-200',
-  missing: 'text-red-600 bg-red-50 border-red-200',
-  ok: 'text-green-600 bg-green-50 border-green-200',
-}
+const IcoGenerate = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+  </svg>
+)
+const IcoDownload = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+  </svg>
+)
+const IcoEye = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+)
+const IcoEyeOff = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+    <line x1="1" y1="1" x2="23" y2="23"/>
+  </svg>
+)
+const IcoCsv = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>
+  </svg>
+)
+const IcoXls = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="9" y1="12" x2="15" y2="18"/><line x1="15" y1="12" x2="9" y2="18"/>
+  </svg>
+)
+const IcoAlert = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+)
+const IcoSpinner = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="a-spin">
+    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+  </svg>
+)
+const IcoCheck = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+)
+const IcoMissing = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+)
 
 export default function ExportPanel({ lang, header, items, positions, missingFields, settings, onStatusChange }: Props) {
   const [loading, setLoading] = useState<string | null>(null)
@@ -91,6 +142,11 @@ export default function ExportPanel({ lang, header, items, positions, missingFie
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ header, items, positions, missingFields }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        setErrors([{ message: data?.error || 'CSV nuk mund të krijohej.', messageEn: data?.error || 'CSV could not be generated.' }])
+        return
+      }
       const blob = await res.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
@@ -109,6 +165,11 @@ export default function ExportPanel({ lang, header, items, positions, missingFie
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ header, items, positions, missingFields }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        setErrors([{ message: data?.error || 'Excel nuk mund të krijohej.', messageEn: data?.error || 'Excel could not be generated.' }])
+        return
+      }
       const blob = await res.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
@@ -127,66 +188,7 @@ export default function ExportPanel({ lang, header, items, positions, missingFie
   const confirmedCodeCount  = items.filter(i => i.status === 'confirmed' || i.status === 'ok').length
   const tariffBlocksExport  = missingCodeCount > 0
   const tariffNeedsReview   = reviewCodeCount > 0
-
-  /* ── Inline SVG icons ── */
-  const IcoGenerate = () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
-    </svg>
-  )
-  const IcoDownload = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-    </svg>
-  )
-  const IcoEye = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-      <circle cx="12" cy="12" r="3"/>
-    </svg>
-  )
-  const IcoEyeOff = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-      <line x1="1" y1="1" x2="23" y2="23"/>
-    </svg>
-  )
-  const IcoCsv = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-      <polyline points="14 2 14 8 20 8"/>
-      <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>
-    </svg>
-  )
-  const IcoXls = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-      <polyline points="14 2 14 8 20 8"/>
-      <line x1="9" y1="12" x2="15" y2="18"/><line x1="15" y1="12" x2="9" y2="18"/>
-    </svg>
-  )
-  const IcoAlert = () => (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-      <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-    </svg>
-  )
-  const IcoSpinner = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="a-spin">
-      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-    </svg>
-  )
-  const IcoCheck = () => (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12"/>
-    </svg>
-  )
-  const IcoMissing = () => (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-    </svg>
-  )
+  const hasNonBlockingSumIssue = sumValidation.checks.some(c => !c.ok && !c.blocking)
 
   const statusConfig: Record<string, { bg: string; color: string; border: string; label: string }> = {
     ready:  { bg: 'var(--green-bg)',  color: 'var(--green)',  border: 'var(--green-bdr)',  label: t(lang, 'status.ready') },
@@ -439,34 +441,43 @@ export default function ExportPanel({ lang, header, items, positions, missingFie
         {/* Generate — blocked by missing codes OR sum mismatch */}
         {(() => {
           const isBlocked   = tariffBlocksExport || sumValidation.hasBlocker
-          const isDraftMode = !tariffBlocksExport && (tariffNeedsReview || sumValidation.hasBlocker)
+          const isDraftMode = !isBlocked && (tariffNeedsReview || hasNonBlockingSumIssue)
           return (
             <>
               <button
                 onClick={() => isBlocked ? undefined : isDraftMode ? generateXml(true) : generateXml(false)}
-                disabled={!hasData || loading === 'xml' || tariffBlocksExport}
+                disabled={!hasData || loading === 'xml' || isBlocked}
                 className="btn btn-primary"
                 style={{
                   width: '100%', height: 56, fontSize: 16, fontWeight: 700, borderRadius: 14, gap: 10,
-                  background: tariffBlocksExport ? 'var(--red)' : isDraftMode ? 'var(--amber)' : undefined,
-                  boxShadow: tariffBlocksExport ? '0 1px 4px rgba(220,38,38,.35)' : isDraftMode ? '0 1px 4px rgba(217,119,6,.4)' : undefined,
-                  opacity: tariffBlocksExport ? .7 : 1,
-                  cursor: tariffBlocksExport ? 'not-allowed' : 'pointer',
+                  background: isBlocked ? 'var(--red)' : isDraftMode ? 'var(--amber)' : undefined,
+                  boxShadow: isBlocked ? '0 1px 4px rgba(220,38,38,.35)' : isDraftMode ? '0 1px 4px rgba(217,119,6,.4)' : undefined,
+                  opacity: isBlocked ? .7 : 1,
+                  cursor: isBlocked ? 'not-allowed' : 'pointer',
                 }}
               >
                 {loading === 'xml'
                   ? <><IcoSpinner />{t(lang, 'messages.validating')}</>
                   : tariffBlocksExport
                     ? <><IcoGenerate />{sq ? 'Kode tariforë mungojnë — nuk mund të eksportohet' : 'Tariff codes missing — cannot export'}</>
+                    : sumValidation.hasBlocker
+                      ? <><IcoGenerate />{sq ? 'Shumat nuk përputhen — rregullo para XML' : 'Sums mismatch — fix before XML'}</>
                     : isDraftMode
                       ? <><IcoGenerate />{sq ? 'Gjenero Draft' : 'Generate Draft'}</>
                       : <><IcoGenerate />{t(lang, 'buttons.generate')}</>}
               </button>
-              {isDraftMode && !tariffBlocksExport && (
+              {isBlocked && sumValidation.hasBlocker && (
+                <p style={{ margin: '-4px 0 0', fontSize: 11.5, color: 'var(--red)', textAlign: 'center' }}>
+                  {sq
+                    ? 'Totali i faturës dhe rreshtat nuk përputhen. Kjo duhet korrigjuar para XML.'
+                    : 'Invoice total and rows do not match. Fix this before XML generation.'}
+                </p>
+              )}
+              {isDraftMode && (
                 <p style={{ margin: '-4px 0 0', fontSize: 11.5, color: 'var(--amber)', textAlign: 'center' }}>
                   {sq
-                    ? 'Ka kode të pakonfirmuara ose shuma nuk përputhen. XML do të shënohet si Draft.'
-                    : 'Unconfirmed codes or sum mismatches present. XML will be marked as Draft.'}
+                    ? 'Ka kode të pakonfirmuara ose paralajmërime dokumenti. XML do të shënohet si Draft.'
+                    : 'Unconfirmed codes or document warnings present. XML will be marked as Draft.'}
                 </p>
               )}
             </>

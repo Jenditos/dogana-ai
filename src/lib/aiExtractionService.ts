@@ -26,40 +26,18 @@ function loadTarik(): TarikRow[] {
 
 /**
  * Validate an AI-suggested code against the full TARIK database.
- * Returns the best matching TARIK entry, or null if nothing fits.
- *
- * Priority:
- *  1. Exact 10-digit match
- *  2. Exact 8-digit match (sub-heading)
- *  3. 6-digit heading match (first valid code in that heading)
- *  4. 4-digit chapter match (first valid code in that chapter)
+ * Only exact 10-digit matches are accepted automatically.
+ * Prefix matches are too risky for customs declarations.
  */
 function matchInTarik(aiCode: string): TarikRow | null {
-  if (!aiCode || aiCode.length < 4) return null
+  if (!aiCode) return null
   const db = loadTarik()
   if (!db.length) return null
 
   const clean = aiCode.replace(/\s/g, '')
+  if (!/^\d{10}$/.test(clean)) return null
 
-  // 1. Exact
-  let found = db.find(e => e[0] === clean)
-  if (found) return found
-
-  // 2. 8-digit prefix
-  if (clean.length >= 8) {
-    found = db.find(e => e[0].startsWith(clean.slice(0, 8)))
-    if (found) return found
-  }
-
-  // 3. 6-digit heading
-  if (clean.length >= 6) {
-    found = db.find(e => e[0].startsWith(clean.slice(0, 6)))
-    if (found) return found
-  }
-
-  // 4. 4-digit chapter (HS heading)
-  found = db.find(e => e[0].startsWith(clean.slice(0, 4)))
-  return found || null
+  return db.find(e => e[0] === clean) || null
 }
 
 /* ── Albanian translation dictionary ────────────────────────── */
@@ -339,34 +317,34 @@ function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<Invo
     const tariffRule = tarikMatch ? null : findTariffByKeyword(desc, rules)
 
     // Pick the best code:
-    // TARIK-validated AI code > keyword rule > raw AI code (unvalidated) > empty
+    // TARIK-validated AI code > keyword rule > empty.
+    // Raw AI codes are shown as review context only; never inserted into XML fields.
     let finalCode: string
     let finalCd:   number
     let finalVat:  number
+    let materialNote = tariffRule?.materialNote
 
     if (tarikMatch) {
-      // AI code validated in TARIK — highest quality
+      // AI code validated exactly in TARIK — highest quality
       finalCode = tarikMatch[0]
-      finalCd   = tarikMatch[2] || 10
-      finalVat  = tarikMatch[3] || 18
-      if (aiRawCode !== finalCode) {
-        console.log(`[TARIK] "${desc}" AI=${aiRawCode} → matched to ${finalCode} (conf:${aiConf})`)
-      }
+      finalCd   = tarikMatch[2] ?? 0
+      finalVat  = tarikMatch[3] ?? 0
     } else if (tariffRule) {
       // Keyword rule match
       finalCode = sanitizeTariffCode(tariffRule.tariffCode)
-      finalCd   = tariffRule.customsRate ?? 10
-      finalVat  = tariffRule.vatRate     ?? 18
+      finalCd   = tariffRule.customsRate ?? 0
+      finalVat  = tariffRule.vatRate     ?? 0
     } else if (aiRawCode) {
-      // AI suggested but not in TARIK — still better than nothing
-      finalCode = aiRawCode
-      finalCd   = Number((item as { cdRate?: number }).cdRate) || 10
-      finalVat  = Number((item as { vatRate?: number }).vatRate) || 18
+      // AI suggested but not exactly present in TARIK — do not export it as a code.
+      finalCode = ''
+      finalCd   = 0
+      finalVat  = 0
+      materialNote = `AI suggested ${aiRawCode} (${aiConf || 'unknown'}), but it was not an exact TARIK match.`
       console.log(`[buildItems] "${desc}" → AI code ${aiRawCode} not found in TARIK (conf:${aiConf})`)
     } else {
       finalCode = ''
-      finalCd   = 10
-      finalVat  = 18
+      finalCd   = 0
+      finalVat  = 0
     }
 
     const hasCode = !!finalCode
@@ -389,7 +367,7 @@ function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<Invo
       customsRate: finalCd,
       vatRate:     finalVat,
       requiresMaterial: tariffRule?.requiresMaterial,
-      materialNote:     tariffRule?.materialNote,
+      materialNote,
       status,
     }
   })
@@ -408,6 +386,10 @@ function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<Invo
  * ─────────────────────────────────────────────────────────────── */
 const MODEL_EXTRACTION = 'gpt-5.5'    // PDF + image extraction
 const MODEL_TEXT       = 'gpt-5-mini' // voice / text-only
+const OPENAI_TIMEOUT_MS = 75_000
+const DEFAULT_MAX_COMPLETION_TOKENS = 12_000
+const MAX_CHUNKS = 6
+const MAX_ITEMS = 300
 
 /* ── Call OpenAI Chat Completions ────────────────────────────── */
 async function callOpenAIRaw(
@@ -422,17 +404,20 @@ async function callOpenAIRaw(
     // response_format omitted: incompatible with file/image inputs in gpt-5.5
     // JSON output is enforced via the prompt ("Return ONLY: { ... }")
   }
-  if (maxTokens) body.max_completion_tokens = maxTokens
+  body.max_completion_tokens = maxTokens ?? DEFAULT_MAX_COMPLETION_TOKENS
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS)
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify(body),
-  })
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout))
   if (!res.ok) {
     const errText = await res.text()
     console.error('[AI] callOpenAI error:', errText)
-    throw new Error(`OpenAI API error: ${errText}`)
+    throw new Error('OpenAI API error')
   }
   const data      = await res.json()
   const raw       = data.choices?.[0]?.message?.content || ''
@@ -445,11 +430,15 @@ async function callOpenAIRaw(
 function parseJSON(raw: string): { header: Partial<HeaderData>; items: Partial<InvoiceItem>[] } {
   if (!raw) throw new Error('OpenAI returned empty response')
   const match = raw.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error(`AI did not return valid JSON. Response: ${raw.slice(0, 300)}`)
+  if (!match) {
+    console.warn('[AI] Invalid JSON response sample:', raw.slice(0, 300))
+    throw new Error('AI did not return valid JSON')
+  }
   try {
     return JSON.parse(match[0])
   } catch (e) {
-    throw new Error(`JSON parse failed: ${e}. Raw: ${raw.slice(0, 300)}`)
+    console.warn('[AI] JSON parse failed:', e, raw.slice(0, 300))
+    throw new Error('JSON parse failed')
   }
 }
 
@@ -477,15 +466,18 @@ async function uploadPdfFile(apiKey: string, b64: string, filename: string): Pro
   fd.append('file', blob, filename)
   fd.append('purpose', 'user_data')
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS)
   const res = await fetch('https://api.openai.com/v1/files', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}` },
     body: fd,
-  })
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout))
   if (!res.ok) {
     const errText = await res.text()
     console.error('[AI] File upload error:', errText)
-    throw new Error(`PDF upload failed: ${errText}`)
+    throw new Error('PDF upload failed')
   }
   const data = await res.json()
   console.log(`[AI] Uploaded PDF "${filename}" → file_id: ${data.id}`)
@@ -627,9 +619,11 @@ async function extractItemsChunked(
 ): Promise<{ items: Partial<InvoiceItem>[] }> {
   const BATCH = 50
   let offset = 0
+  let chunkCount = 0
   const allItems: Partial<InvoiceItem>[] = []
 
-  while (true) {
+  while (chunkCount < MAX_CHUNKS && allItems.length < MAX_ITEMS) {
+    chunkCount++
     const prompt = `Extract line items ${offset + 1} to ${offset + BATCH} from this invoice.
 If there are fewer remaining items, return all remaining ones.
 Return ONLY: { "items": [...], "hasMore": true/false }
@@ -648,12 +642,16 @@ Use 0 for missing numbers.`
     let parsed: { items?: Partial<InvoiceItem>[]; hasMore?: boolean }
     try { parsed = parseJSON(raw) as typeof parsed } catch { break }
 
-    const chunk = parsed.items || []
+    const chunk = (parsed.items || []).slice(0, MAX_ITEMS - allItems.length)
     if (chunk.length === 0) break
     allItems.push(...chunk)
 
     if (!parsed.hasMore || chunk.length < BATCH) break
     offset += BATCH
+  }
+
+  if (chunkCount >= MAX_CHUNKS || allItems.length >= MAX_ITEMS) {
+    console.warn(`[AI] Chunked extraction stopped at safety limit: chunks=${chunkCount}, items=${allItems.length}`)
   }
 
   console.log(`[AI] Chunked extraction complete: ${allItems.length} items`)
@@ -669,14 +667,6 @@ export async function extractWithAI(
 ): Promise<ExtractionResult> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY not configured')
-
-  const content: unknown[] = [
-    { type: 'text', text: EXTRACTION_PROMPT },
-    ...base64Images.map(img => ({
-      type: 'image_url',
-      image_url: { url: `data:${mimeType};base64,${img}`, detail: 'high' },
-    })),
-  ]
 
   // Same 2-call strategy for images: header + items separately
   const headerContent: unknown[] = [

@@ -35,7 +35,7 @@ export default function MicDiagnostic({ lang, onClose }: Props) {
   const [devices,   setDevices]   = useState<DeviceInfo[]>([])
   const [selDevice, setSelDevice] = useState<string>('')
   const [srText,    setSrText]    = useState('')
-  const [srStatus,  setSrStatus]  = useState<Result>('pending')
+  const [,          setSrStatus]  = useState<Result>('pending')
   const [checks,    setChecks]    = useState<CheckResult[]>([])
   const [running,   setRunning]   = useState(false)
 
@@ -45,9 +45,6 @@ export default function MicDiagnostic({ lang, onClose }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const srRef      = useRef<any>(null)
 
-  /* cleanup on unmount */
-  useEffect(() => () => { cleanup() }, []) // eslint-disable-line
-
   const cleanup = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
     try { srRef.current?.stop() } catch {}
@@ -55,6 +52,9 @@ export default function MicDiagnostic({ lang, onClose }: Props) {
     streamRef.current?.getTracks().forEach(t => t.stop())
     streamRef.current = null
   }
+
+  /* cleanup on unmount */
+  useEffect(() => () => { cleanup() }, [])
 
   const addCheck = (c: CheckResult) => setChecks(prev => [...prev, c])
 

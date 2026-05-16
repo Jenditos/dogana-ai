@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'CSV export failed' }, { status: 500 })
   }
 }

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import type { Language } from '@/types'
 
 interface TarikEntry {
@@ -61,7 +61,6 @@ export default function TariffSearch({ lang, onSelect, onClose }: Props) {
   const [loading,     setLoading]     = useState(true)
   const [query,       setQuery]       = useState('')
   const [chFilter,    setChFilter]    = useState('')
-  const [results,     setResults]     = useState<TarikEntry[]>([])
   const [selected,    setSelected]    = useState<TarikEntry | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const sq = lang === 'sq'
@@ -79,16 +78,14 @@ export default function TariffSearch({ lang, onSelect, onClose }: Props) {
       .catch(() => setLoading(false))
   }, [])
 
-  // Search
-  const search = useCallback((q: string, ch: string, data: TarikEntry[]) => {
-    const qUpper = q.trim().toUpperCase()
-    let filtered = data
+  const results = useMemo(() => {
+    const qUpper = query.trim().toUpperCase()
+    let filtered = db
 
-    if (ch) filtered = filtered.filter(e => e.code.startsWith(ch))
+    if (chFilter) filtered = filtered.filter(e => e.code.startsWith(chFilter))
 
     if (!qUpper) {
-      setResults(filtered.slice(0, 50))
-      return
+      return filtered.slice(0, 50)
     }
 
     const isCode = /^\d/.test(qUpper)
@@ -102,12 +99,8 @@ export default function TariffSearch({ lang, onSelect, onClose }: Props) {
       })
     }
 
-    setResults(filtered.slice(0, 100))
-  }, [])
-
-  useEffect(() => {
-    search(query, chFilter, db)
-  }, [query, chFilter, db, search])
+    return filtered.slice(0, 100)
+  }, [query, chFilter, db])
 
   const handleSelect = (entry: TarikEntry) => {
     setSelected(entry)
@@ -118,7 +111,6 @@ export default function TariffSearch({ lang, onSelect, onClose }: Props) {
   }
 
   const totalCount = db.length
-  const chapterCount = Object.keys(CHAPTERS).length
 
   return (
     <div

@@ -55,20 +55,10 @@ const IcoAlert = () => (
     <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
   </svg>
 )
-const IcoInfo = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-  </svg>
-)
 const IcoFile = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
     <polyline points="14 2 14 8 20 8"/>
-  </svg>
-)
-const IcoSpinner = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="a-spin" style={{ opacity: .8 }}>
-    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
   </svg>
 )
 
@@ -216,7 +206,7 @@ function StatCard({ value, label, subtitle, color = 'blue' }: {
     red:   ['var(--red-bg)',   'var(--red)',   'var(--red-bdr)'],
     gray:  ['var(--surface-3)','var(--t3)',    'var(--border)'],
   }
-  const [bg, fg, bdr] = colors[color] || colors.gray
+  const [, fg, bdr] = colors[color] || colors.gray
   return (
     <div style={{
       background: 'var(--surface)',
@@ -347,20 +337,27 @@ export default function Home() {
   useEffect(() => {
     const savedLang = getLanguage()
     const savedSettings = localStorage.getItem('dudi_settings')
-    if (savedLang) setLang(savedLang)
-    if (savedSettings) {
-      try {
-        const p = JSON.parse(savedSettings)
-        setSettings({ ...DEFAULT_SETTINGS, ...p, language: savedLang })
-      } catch {}
-    }
-    setTariffRules(getTariffRules())
+    const savedRules = getTariffRules()
+    queueMicrotask(() => {
+      if (savedLang) setLang(savedLang)
+      if (savedSettings) {
+        try {
+          const p = JSON.parse(savedSettings)
+          setSettings({ ...DEFAULT_SETTINGS, ...p, language: savedLang })
+        } catch {}
+      }
+      setTariffRules(savedRules)
+    })
   }, [])
 
   useEffect(() => {
     if (items.length > 0) {
-      setPositions(groupToAsycudaPositions(items))
-      setMissingFields(getMissingFields(header as HeaderData, items))
+      const nextPositions = groupToAsycudaPositions(items)
+      const nextMissingFields = getMissingFields(header as HeaderData, items)
+      queueMicrotask(() => {
+        setPositions(nextPositions)
+        setMissingFields(nextMissingFields)
+      })
     }
   }, [items, header])
 
@@ -497,10 +494,9 @@ export default function Home() {
 
   const sq = lang === 'sq'
 
-  // ── Count fields vs. rows (must be consistent across UI) ──
-  // missingFieldCount: total number of missing field occurrences
-  const missingFieldCount = missingFields.filter(m => m.status === 'missing').length
-  // missingRowCount: number of ROWS that have at least one missing field
+  // ── Shared review model: blockers vs. warnings must stay consistent across UI ──
+  const blockingFields = missingFields.filter(m => m.status === 'missing')
+  const reviewFields   = missingFields.filter(m => m.status === 'review')
   const packingListFound  = items.some(i => i.grossWeight > 0)
   const missingRowCount   = items.filter(item => {
     if (!item.tariffCode) return true
@@ -509,19 +505,20 @@ export default function Home() {
     if (packingListFound && (!item.grossWeight || item.grossWeight === 0)) return true
     return false
   }).length
-  // reviewCount: items with a proposed tariff code that needs confirmation
+  const blockingIssueCount = Math.max(blockingFields.length, missingRowCount)
+  const documentReviewCount = reviewFields.length
   const reviewCount  = items.filter(i => i.status === 'review' && i.tariffCode).length
-  const okCount      = items.filter(i => i.status === 'ok' || i.status === 'confirmed').length
-  // For backward compat (stepper badge)
-  const missingCount = missingRowCount
+  const totalReviewCount = reviewCount + documentReviewCount
+  const missingCount = blockingIssueCount
 
   // ── Group missing fields by type for the error box ──
   const missingByType = {
-    tariffCode:  missingFields.filter(m => m.field.toLowerCase().includes('tarifor')).length,
-    grossWeight: missingFields.filter(m => m.field.toLowerCase().includes('pesha')).length,
-    qty:         missingFields.filter(m => m.field.toLowerCase().includes('sasi')).length,
-    value:       missingFields.filter(m => m.field.toLowerCase().includes('vler')).length,
-    header:      missingFields.filter(m => !m.item).length,
+    tariffCode:  blockingFields.filter(m => m.field.toLowerCase().includes('tarifor')).length,
+    grossWeight: blockingFields.filter(m => m.field.toLowerCase().includes('pesha')).length,
+    packages:    blockingFields.filter(m => m.field.toLowerCase().includes('paketime')).length,
+    qty:         blockingFields.filter(m => m.field.toLowerCase().includes('sasi')).length,
+    value:       blockingFields.filter(m => m.field.toLowerCase().includes('vler')).length,
+    header:      blockingFields.filter(m => !m.item).length,
   }
 
   // ── Diff warnings: form total vs. row sums ──
@@ -529,6 +526,13 @@ export default function Home() {
   const sumPkgs    = items.reduce((s, i) => s + i.packages, 0)
   const weightDiff = header.totalGrossWeight && Math.abs((header.totalGrossWeight || 0) - sumWeight) > 0.5
   const pkgDiff    = header.totalPackages    && Math.abs((header.totalPackages    || 0) - sumPkgs)   > 0
+  const needsReview = reviewCount > 0 || documentReviewCount > 0 || Boolean(weightDiff) || Boolean(pkgDiff)
+  const canAdvanceToGenerate = items.length > 0 && blockingIssueCount === 0
+
+  const goToStep = (nextStep: Step) => {
+    if (nextStep === 'generate' && !canAdvanceToGenerate) return
+    setStep(nextStep)
+  }
 
   /* ── trust chips data ── */
   const trustChips = sq
@@ -596,7 +600,7 @@ export default function Home() {
       </header>
 
       {/* ── Step Indicator ──────────────────────────────────── */}
-      <StepIndicator step={step} lang={lang} missingCount={missingCount} onClick={setStep} />
+      <StepIndicator step={step} lang={lang} missingCount={missingCount} onClick={goToStep} />
 
       {/* ── Main ────────────────────────────────────────────── */}
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px 80px' }}>
@@ -703,14 +707,14 @@ export default function Home() {
 
                 {/* ── 4 stat cards ── */}
                 <div className="stat-cards-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12 }}>
-                  <StatCard value={items.length}     label={sq ? 'RRESHTA FATURE'     : 'INVOICE ROWS'}      color="blue" />
-                  <StatCard value={positions.length} label={sq ? 'POZICIONE ASYCUDA'  : 'ASYCUDA POSITIONS'} color="green" />
-                  <StatCard value={missingRowCount}  label={sq ? 'RRESHTA ME MUNGESA' : 'ROWS WITH MISSING'} color={missingRowCount > 0 ? 'red' : 'green'} />
-                  <StatCard value={reviewCount}      label={sq ? 'KODE PËR KONTROLL'  : 'CODES TO REVIEW'}   color={reviewCount > 0 ? 'amber' : 'green'} />
+                  <StatCard value={items.length}          label={sq ? 'RRESHTA FATURE'      : 'INVOICE ROWS'}      color="blue" />
+                  <StatCard value={positions.length}      label={sq ? 'POZICIONE ASYCUDA'   : 'ASYCUDA POSITIONS'} color="green" />
+                  <StatCard value={blockingIssueCount}    label={sq ? 'MUNGESA KRITIKE'     : 'CRITICAL MISSING'}  color={blockingIssueCount > 0 ? 'red' : 'green'} />
+                  <StatCard value={totalReviewCount}      label={sq ? 'PËR KONTROLL'        : 'NEEDS REVIEW'}      color={totalReviewCount > 0 ? 'amber' : 'green'} />
                 </div>
 
-                {/* ── One compact status bar (blocking errors OR success) ── */}
-                {missingRowCount > 0 ? (
+                {/* ── One compact status bar: blocked, draft-ready, or final-ready ── */}
+                {blockingIssueCount > 0 ? (
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10,
                     padding: '12px 16px', borderRadius: 12,
@@ -719,15 +723,32 @@ export default function Home() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <IcoAlert />
                       <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--red)' }}>
-                        {sq ? `${missingRowCount} rreshta me mungesa` : `${missingRowCount} rows with missing data`}
+                        {sq ? `${blockingIssueCount} mungesa kritike` : `${blockingIssueCount} critical missing item(s)`}
                       </span>
                       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                         {missingByType.tariffCode > 0  && <span style={{ padding:'2px 8px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.tariffCode} {sq?'kode':'codes'}</span>}
                         {missingByType.grossWeight > 0 && <span style={{ padding:'2px 8px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.grossWeight} {sq?'pesha':'weights'}</span>}
+                        {missingByType.packages > 0    && <span style={{ padding:'2px 8px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.packages} {sq?'paketime':'packages'}</span>}
                         {missingByType.qty > 0         && <span style={{ padding:'2px 8px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.qty} {sq?'sasi':'qty'}</span>}
+                        {missingByType.value > 0       && <span style={{ padding:'2px 8px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.value} {sq?'vlera':'values'}</span>}
                         {missingByType.header > 0      && <span style={{ padding:'2px 8px', borderRadius:99, background:'rgba(220,38,38,.1)', color:'var(--red)', fontSize:11.5, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.header} {sq?'dok.':'doc.'}</span>}
                       </div>
                     </div>
+                  </div>
+                ) : needsReview ? (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                    padding: '10px 16px', borderRadius: 12,
+                    background: 'var(--amber-bg)', border: '1px solid var(--amber-bdr)',
+                  }}>
+                    <IcoAlert />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--amber)' }}>
+                      {sq
+                        ? 'Draft i mundshëm — kontrolli final kërkon verifikim manual.'
+                        : 'Draft possible — final export needs manual verification.'}
+                    </span>
+                    {reviewCount > 0 && <span style={{ padding:'2px 8px', borderRadius:99, background:'rgba(217,119,6,.1)', color:'var(--amber)', fontSize:11.5, fontWeight:700, border:'1px solid var(--amber-bdr)' }}>{reviewCount} {sq?'kode':'codes'}</span>}
+                    {documentReviewCount > 0 && <span style={{ padding:'2px 8px', borderRadius:99, background:'rgba(217,119,6,.1)', color:'var(--amber)', fontSize:11.5, fontWeight:700, border:'1px solid var(--amber-bdr)' }}>{documentReviewCount} {sq?'dok.':'doc.'}</span>}
                   </div>
                 ) : (
                   <div style={{
@@ -737,7 +758,7 @@ export default function Home() {
                   }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                     <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>
-                      {sq ? 'Të gjitha fushat e detyrueshme janë plotësuar.' : 'All mandatory fields are filled.'}
+                      {sq ? 'Gati për XML final — të dhënat kritike janë konfirmuar.' : 'Ready for final XML — critical data is confirmed.'}
                     </span>
                   </div>
                 )}
@@ -750,8 +771,8 @@ export default function Home() {
                       <span style={{ fontSize:12.5, color:'var(--amber)', fontWeight:600 }}>
                         {sq ? 'Nuk ka Packing List — Pesha dhe Paketime nuk janë nga dokumenti' : 'No Packing List — Weight and Packages not from document'}
                       </span>
-                      <button onClick={() => setHeader(h => ({ ...h, totalGrossWeight: 0, totalPackages: 0 }))} style={{ padding:'4px 12px', borderRadius:7, border:'1px solid var(--amber-bdr)', background:'var(--surface)', color:'var(--amber)', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
-                        {sq ? 'Vendos 0 të dyja' : 'Set both to 0'}
+                      <button onClick={() => setShowDocFields(true)} style={{ padding:'4px 12px', borderRadius:7, border:'1px solid var(--amber-bdr)', background:'var(--surface)', color:'var(--amber)', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                        {sq ? 'Plotëso manualisht' : 'Fill manually'}
                       </button>
                     </div>
                   )
@@ -1241,22 +1262,22 @@ export default function Home() {
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
             }}>
               <div>
-                {missingRowCount > 0 ? (
+                {blockingIssueCount > 0 ? (
                   <>
                     <p style={{ margin:'0 0 2px', fontSize:13, fontWeight:700, color:'var(--red)' }}>
                       {sq ? 'Ende nuk mund të vazhdosh.' : 'Cannot continue yet.'}
                     </p>
                     <p style={{ margin:0, fontSize:12, color:'var(--t3)' }}>
-                      {sq ? `Plotëso ${missingRowCount} rreshtat me mungesa.` : `Fill ${missingRowCount} rows with missing data.`}
+                      {sq ? `Plotëso ${blockingIssueCount} mungesa kritike.` : `Fill ${blockingIssueCount} critical missing item(s).`}
                     </p>
                   </>
-                ) : reviewCount > 0 ? (
+                ) : needsReview ? (
                   <>
                     <p style={{ margin:'0 0 2px', fontSize:13, fontWeight:700, color:'var(--amber)' }}>
-                      {sq ? 'Gati, por ka kode të pakonfirmuara.' : 'Ready, but has unconfirmed codes.'}
+                      {sq ? 'Draft i mundshëm, finali kërkon kontroll.' : 'Draft possible, final needs review.'}
                     </p>
                     <p style={{ margin:0, fontSize:12, color:'var(--t3)' }}>
-                      {sq ? 'Do të krijohet Draft. Konfirmo kodet për eksport final.' : 'Will generate Draft. Confirm codes for final export.'}
+                      {sq ? 'Konfirmo kodet dhe dokumentet për eksport final.' : 'Confirm codes and document warnings for final export.'}
                     </p>
                   </>
                 ) : (
@@ -1266,20 +1287,20 @@ export default function Home() {
                 )}
               </div>
               <button
-                onClick={() => missingRowCount > 0 ? undefined : setStep('generate')}
-                disabled={missingRowCount > 0}
+                onClick={() => canAdvanceToGenerate ? setStep('generate') : undefined}
+                disabled={!canAdvanceToGenerate}
                 className="btn btn-primary"
                 style={{
                   height: 50, padding: '0 28px', fontSize: 15, gap: 10, flexShrink: 0,
-                  opacity: missingRowCount > 0 ? .4 : 1,
-                  cursor: missingRowCount > 0 ? 'not-allowed' : 'pointer',
-                  background: reviewCount > 0 && missingRowCount === 0 ? 'var(--amber)' : undefined,
-                  boxShadow: reviewCount > 0 && missingRowCount === 0 ? '0 1px 4px rgba(217,119,6,.35)' : undefined,
+                  opacity: !canAdvanceToGenerate ? .4 : 1,
+                  cursor: !canAdvanceToGenerate ? 'not-allowed' : 'pointer',
+                  background: needsReview && canAdvanceToGenerate ? 'var(--amber)' : undefined,
+                  boxShadow: needsReview && canAdvanceToGenerate ? '0 1px 4px rgba(217,119,6,.35)' : undefined,
                 }}
               >
-                {missingRowCount > 0
+                {!canAdvanceToGenerate
                   ? (sq ? 'Vazhdo' : 'Continue')
-                  : reviewCount > 0
+                  : needsReview
                     ? (sq ? 'Vazhdo (Draft)' : 'Continue (Draft)')
                     : (sq ? 'Vazhdo te XML' : 'Continue to XML')}
                 {' '}<IcoArrowRight />

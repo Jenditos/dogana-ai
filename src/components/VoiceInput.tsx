@@ -45,14 +45,6 @@ export default function VoiceInput({ lang, onExtracted }: Props) {
 
   const sq = lang === 'sq'
 
-  /* ── Enumerate devices ─────────────────────────────────────── */
-  useEffect(() => {
-    navigator.mediaDevices?.getUserMedia({ audio: true })
-      .then(s => { s.getTracks().forEach(t => t.stop()); enumerate() })
-      .catch(() => enumerate())
-    return () => cleanup()
-  }, []) // eslint-disable-line
-
   const enumerate = async () => {
     try {
       const all = await navigator.mediaDevices.enumerateDevices()
@@ -80,6 +72,14 @@ export default function VoiceInput({ lang, onExtracted }: Props) {
     audioCtxRef.current = null
     setVolume(0)
   }
+
+  /* ── Enumerate devices ─────────────────────────────────────── */
+  useEffect(() => {
+    navigator.mediaDevices?.getUserMedia({ audio: true })
+      .then(s => { s.getTracks().forEach(t => t.stop()); enumerate() })
+      .catch(() => enumerate())
+    return () => cleanup()
+  }, [])
 
   /* ── Start recording ──────────────────────────────────────── */
   const startRecording = async () => {

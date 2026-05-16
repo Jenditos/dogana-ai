@@ -35,8 +35,6 @@ export function validateSums(
   const sumItemsWeight  = items.reduce((s, i) => s + i.grossWeight,   0)
   const sumItemsPkgs    = items.reduce((s, i) => s + i.packages,      0)
   const sumPosValue     = positions.reduce((s, p) => s + p.totalValue,   0)
-  const sumPosWeight    = positions.reduce((s, p) => s + p.grossWeight,  0)
-
   const invoiceTotal   = Number(header.totalInvoice)      || 0
   const headerWeight   = Number(header.totalGrossWeight)  || 0
   const headerPkgs     = Number(header.totalPackages)     || 0
@@ -97,11 +95,15 @@ export function validateAll(
   const mandatory: { key: keyof HeaderData; sq: string; en: string }[] = [
     { key: 'exporterName', sq: 'Eksportuesi mungon', en: 'Exporter is missing' },
     { key: 'importerName', sq: 'Importuesi mungon', en: 'Importer is missing' },
+    { key: 'importerNui', sq: 'NUI/NIPT mungon', en: 'Importer NUI/VAT is missing' },
     { key: 'invoiceNumber', sq: 'Numri i faturës mungon', en: 'Invoice number is missing' },
     { key: 'invoiceDate', sq: 'Data e faturës mungon', en: 'Invoice date is missing' },
+    { key: 'incoterm', sq: 'Incoterm mungon', en: 'Incoterm is missing' },
     { key: 'countryOfOrigin', sq: 'Vendi i origjinës mungon', en: 'Country of origin is missing' },
     { key: 'countryOfExport', sq: 'Vendi i eksportit mungon', en: 'Country of export is missing' },
+    { key: 'countryOfDestination', sq: 'Vendi i destinacionit mungon', en: 'Country of destination is missing' },
     { key: 'currency', sq: 'Monedha mungon', en: 'Currency is missing' },
+    { key: 'totalInvoice', sq: 'Totali i faturës mungon', en: 'Invoice total is missing' },
   ]
 
   for (const m of mandatory) {
@@ -215,6 +217,16 @@ export function getMissingFields(
       })
     }
 
+    if (!item.totalValue || item.totalValue === 0) {
+      missing.push({
+        field: 'Vlera totale',
+        item: item.descriptionEn,
+        problem: `Vlera totale mungon për "${item.descriptionEn}"`,
+        whatToFill: 'Shto vlerën totale',
+        status: 'missing',
+      })
+    }
+
     // Gross weight: required for customs, but only flag after packing list analysis.
     // If packing list was found and weight is still 0 → truly missing.
     // If packing list wasn't found (all weights are 0) → mark as review, not missing.
@@ -229,6 +241,16 @@ export function getMissingFields(
           ? 'Shto pesën bruto (kg)'
           : 'Ngarko Packing List ose shto pesën manualisht',
         status: weightStatus,
+      })
+    }
+
+    if (packingListFound && (!item.packages || item.packages === 0)) {
+      missing.push({
+        field: 'Paketime',
+        item: item.descriptionEn,
+        problem: `Paketime mungojnë për "${item.descriptionEn}"`,
+        whatToFill: 'Shto numrin e paketimeve',
+        status: 'missing',
       })
     }
   }

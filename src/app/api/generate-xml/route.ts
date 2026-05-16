@@ -16,7 +16,9 @@ export async function POST(req: NextRequest) {
 
     const validation = validateAll(header, items, positions)
 
-    if (!validation.valid && !forceDraft) {
+    const requiresDraft = !validation.valid || validation.warnings.length > 0
+
+    if (requiresDraft && !forceDraft) {
       return NextResponse.json({
         error: 'Validation failed',
         errors: validation.errors,
@@ -27,19 +29,19 @@ export async function POST(req: NextRequest) {
 
     const xml = generateXml(header, positions, settings)
     const oldValues = detectOldValues(xml)
-    const status = !validation.valid ? 'draft' : validation.warnings.length > 0 ? 'review' : 'ready'
+    const status = forceDraft || requiresDraft ? 'draft' : 'ready'
 
     return NextResponse.json({
       xml,
       status,
       validation,
       oldValues,
-      isDraft: !validation.valid,
+      isDraft: forceDraft || requiresDraft,
     })
   } catch (error) {
     console.error('XML generation error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'XML generation failed' },
+      { error: 'XML generation failed' },
       { status: 500 }
     )
   }
