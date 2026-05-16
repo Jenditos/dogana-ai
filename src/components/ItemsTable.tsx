@@ -422,9 +422,9 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
               {viewMode === 'pro' && <th className="px-3 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">{t(lang, 'table.netWeight')}</th>}
               <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">{t(lang, 'table.tariffCode')}</th>
               {viewMode === 'pro' && <th className="px-3 py-3 text-right font-semibold text-gray-600">{t(lang, 'table.customsRate')}</th>}
-              <th className="px-3 py-3 text-right font-semibold text-gray-600">{t(lang, 'table.vatRate')}</th>
-              <th className="px-3 py-3 text-center font-semibold text-gray-600">{t(lang, 'table.status')}</th>
-              <th className="px-3 py-3"></th>
+              {viewMode === 'pro' && <th className="px-3 py-3 text-right font-semibold text-gray-600">{t(lang, 'table.vatRate')}</th>}
+              <th className="px-3 py-3 text-left font-semibold text-gray-600" style={{ width: viewMode === 'simple' ? 160 : undefined }}>{t(lang, 'table.status')}</th>
+              {/* No empty header — delete moved into status cell */}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -518,90 +518,58 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                   {pro && <td className={cellClass}><input type="number" className={numInputClass + ' w-16'} value={item.customsRate} onChange={e => updateItem(idx, 'customsRate', parseFloat(e.target.value) || 0)} /></td>}
                   {pro && <td className={cellClass}><input type="number" className={numInputClass + ' w-16'} value={item.vatRate} onChange={e => updateItem(idx, 'vatRate', parseFloat(e.target.value) || 0)} /></td>}
 
-                  {/* Status + Issue summary + Confirm button */}
-                  <td className={cellClass} style={{ verticalAlign: 'middle' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                      {/* Composite status badge (reflects ALL field issues) */}
+                  {/* Status + actions — combined, no separate delete column */}
+                  <td className={cellClass} style={{ verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
+
+                      {/* Status badge */}
                       <StatusBadge status={cs} lang={lang} />
 
-                      {/* Issue summary badge */}
-                      {/* Issue labels: "Mungon: X" or "Për kontroll: X" per field */}
-                      {missingIss.map(iss => (
-                        <span key={iss.field} style={{ fontSize: 10.5, color: 'var(--red)', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                          {sq ? `Mungon: ${iss.labelSq.replace(' mungon','').replace(' mungojnë','')}` : `Missing: ${iss.labelEn.replace(' missing','')}`}
-                        </span>
-                      ))}
-                      {reviewIss.map(iss => (
-                        <span key={iss.field} style={{ fontSize: 10.5, color: 'var(--amber)', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                          {sq ? `Për kontroll: ${iss.labelSq.replace(' për kontroll','')}` : `Review: ${iss.labelEn.replace(' needs review','')}`}
-                        </span>
-                      ))}
-
-                      {/* Confirm button: show for 'review' items that have a code */}
+                      {/* Confirm button (review with code) */}
                       {item.status === 'review' && item.tariffCode && (
-                        <button
-                          onClick={() => confirmCode(idx)}
+                        <button onClick={() => confirmCode(idx)}
                           title={sq ? 'Konfirmo kodin tarifor' : 'Confirm tariff code'}
                           style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
                             padding: '2px 8px', borderRadius: 6, fontSize: 10.5, fontWeight: 700,
                             border: '1px solid var(--green-bdr)', background: 'var(--green-bg)',
                             color: 'var(--green)', cursor: 'pointer', whiteSpace: 'nowrap',
-                            transition: 'all .15s',
-                          }}
-                        >
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12"/>
-                          </svg>
+                          }}>
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                           {sq ? 'Konfirmo' : 'Confirm'}
                         </button>
                       )}
 
-                      {/* Unconfirm button: shown for confirmed items */}
+                      {/* Unconfirm (confirmed items) */}
                       {item.status === 'confirmed' && (
-                        <button
-                          onClick={() => unconfirmCode(idx)}
-                          title={sq ? 'Kthe te "Për kontroll"' : 'Mark as needs review'}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            padding: '2px 8px', borderRadius: 6, fontSize: 10.5, fontWeight: 600,
-                            border: '1px solid var(--border)', background: 'var(--surface-3)',
-                            color: 'var(--t4)', cursor: 'pointer', whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {sq ? 'Çkonfirmo' : 'Unconfirm'}
+                        <button onClick={() => unconfirmCode(idx)}
+                          style={{ padding:'2px 7px', borderRadius:6, border:'1px solid var(--border)', background:'var(--surface-3)', color:'var(--t4)', cursor:'pointer', fontSize:10.5 }}>
+                          {sq ? 'Undo' : 'Undo'}
                         </button>
                       )}
 
-                      {/* Material note for items needing clarification */}
-                      {item.requiresMaterial && item.status !== 'confirmed' && (
-                        <span style={{
-                          fontSize: 10, color: 'var(--amber)', display: 'flex', alignItems: 'center', gap: 3,
-                        }}>
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                          {item.materialNote || (sq ? 'Specifikoni materialin' : 'Specify material')}
+                      {/* In pro view: verbose issue labels */}
+                      {pro && missingIss.map(iss => (
+                        <span key={iss.field} style={{ fontSize: 10, color: 'var(--red)', fontWeight: 700 }}>
+                          {sq ? `Mungon: ${iss.labelSq.replace(' mungon','').replace(' mungojnë','')}` : `Missing: ${iss.labelEn.replace(' missing','')}`}
                         </span>
-                      )}
-                    </div>
-                  </td>
+                      ))}
 
-                  {/* Delete button */}
-                  <td className={cellClass}>
-                    <button
-                      onClick={() => removeItem(idx)}
-                      style={{
-                        width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)',
-                        background: 'var(--surface-3)', color: 'var(--t4)', cursor: 'pointer',
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all .15s',
-                      }}
-                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--red-bg)'; e.currentTarget.style.color = 'var(--red)'; e.currentTarget.style.borderColor = 'var(--red-bdr)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface-3)'; e.currentTarget.style.color = 'var(--t4)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
-                    >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                      </svg>
-                    </button>
+                      {/* Delete — always last, no separate column */}
+                      <button onClick={() => removeItem(idx)}
+                        style={{
+                          width: 24, height: 24, borderRadius: 6, border: '1px solid var(--border)',
+                          background: 'var(--surface-3)', color: 'var(--t4)', cursor: 'pointer',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all .15s', marginLeft: 2, flexShrink: 0,
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background='var(--red-bg)'; e.currentTarget.style.color='var(--red)'; e.currentTarget.style.borderColor='var(--red-bdr)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background='var(--surface-3)'; e.currentTarget.style.color='var(--t4)'; e.currentTarget.style.borderColor='var(--border)'; }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )
