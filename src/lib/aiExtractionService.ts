@@ -246,7 +246,7 @@ export async function extractWithPdf(
       })),
     ]
 
-    const parsed = await callOpenAI(apiKey, 'gpt-4o-mini', content, 4096)
+    const parsed = await callOpenAI(apiKey, 'gpt-4o-mini', content, 16000)
     return { header: parsed.header || {}, items: buildItems(parsed), missingFields: [] }
   } finally {
     // Always clean up uploaded files (privacy + storage)
@@ -274,7 +274,7 @@ export async function extractWithAI(
     })),
   ]
 
-  const parsed = await callOpenAI(apiKey, 'gpt-4o-mini', content, 4096)
+  const parsed = await callOpenAI(apiKey, 'gpt-4o-mini', content, 16000)
   return { header: parsed.header || {}, items: buildItems(parsed), missingFields: [] }
 }
 
@@ -295,7 +295,7 @@ ${trimmed}
 ---`
 
   const content = [{ type: 'text', text: prompt }]
-  const parsed  = await callOpenAI(apiKey, 'gpt-5-mini', content, 4096)
+  const parsed  = await callOpenAI(apiKey, 'gpt-5-mini', content, 16000)
   return { header: parsed.header || {}, items: buildItems(parsed), missingFields: [] }
 }
 
