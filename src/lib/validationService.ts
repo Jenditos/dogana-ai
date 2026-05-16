@@ -101,7 +101,16 @@ export function getMissingFields(
     }
   }
 
+  // Determine if the extraction found ANY weight/package data at all.
+  // If at least one item has grossWeight > 0, the packing list was likely found.
+  // In that case, items with weight=0 are genuinely missing (not extraction failures).
+  // If NO item has weight data, it means the packing list wasn't extracted yet —
+  // mark weight issues as 'review' (needs verification) not 'missing' (blocking).
+  const packingListFound = items.some(i => i.grossWeight > 0)
+  const weightStatus: 'missing' | 'review' = packingListFound ? 'missing' : 'review'
+
   for (const item of items) {
+    // Tariff code: always required → 'missing' if absent
     if (!item.tariffCode) {
       missing.push({
         field: 'Kodi tarifor',
@@ -111,15 +120,8 @@ export function getMissingFields(
         status: 'missing',
       })
     }
-    if (!item.grossWeight || item.grossWeight === 0) {
-      missing.push({
-        field: 'Pesha bruto',
-        item: item.descriptionEn,
-        problem: `Pesha bruto mungon për "${item.descriptionEn}"`,
-        whatToFill: 'Shto pesën bruto (kg)',
-        status: 'missing',
-      })
-    }
+
+    // Quantity: required → 'missing' if zero
     if (!item.qty || item.qty === 0) {
       missing.push({
         field: 'Sasia',
@@ -129,6 +131,39 @@ export function getMissingFields(
         status: 'missing',
       })
     }
+
+    // Gross weight: required for customs, but only flag after packing list analysis.
+    // If packing list was found and weight is still 0 → truly missing.
+    // If packing list wasn't found (all weights are 0) → mark as review, not missing.
+    if (!item.grossWeight || item.grossWeight === 0) {
+      missing.push({
+        field: 'Pesha bruto',
+        item: item.descriptionEn,
+        problem: packingListFound
+          ? `Pesha bruto mungon për "${item.descriptionEn}"`
+          : `Pesha bruto nuk u gjet — kontrollo nëse PDF ka Packing List`,
+        whatToFill: packingListFound
+          ? 'Shto pesën bruto (kg)'
+          : 'Ngarko Packing List ose shto pesën manualisht',
+        status: weightStatus,
+      })
+    }
+  }
+
+  // If no weight data was found at all, add a single document-level warning
+  // instead of one warning per item (which would flood the missing fields list).
+  if (!packingListFound && items.length > 0) {
+    // Replace per-item weight warnings with a single document-level warning
+    const weightWarnings = missing.filter(m => m.field === 'Pesha bruto')
+    // Remove individual weight warnings and replace with one grouped warning
+    const withoutWeightWarnings = missing.filter(m => m.field !== 'Pesha bruto')
+    withoutWeightWarnings.push({
+      field: 'Pesha bruto (të gjitha)',
+      problem: `Packing List nuk u gjet — pesët mungojnë për ${weightWarnings.length} artikuj`,
+      whatToFill: 'Ngarko Packing List bashkë me faturën ose shto pesët manualisht',
+      status: 'review',
+    })
+    return withoutWeightWarnings
   }
 
   return missing

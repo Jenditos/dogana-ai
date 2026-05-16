@@ -51,66 +51,94 @@ export function translateToAlbanian(descriptionEn: string): string {
   return upper
 }
 
-/* ── Shared extraction prompt ────────────────────────────────── */
-const EXTRACTION_PROMPT = `You are an expert customs document data extractor. Extract ALL data from this commercial invoice or packing list.
+/* ── Shared header-only extraction prompt ────────────────────── */
+const HEADER_PROMPT = `You are an expert customs document data extractor.
 
-FIELD MAPPING (extract these exact fields):
+Extract ONLY the document header fields from this commercial customs document.
+
+FIELD MAPPING:
 - exporterName: Seller / Manufacturer / Shipper company name
 - exporterAddress: Full address of the seller
 - importerName: Buyer / Consignee company name
 - importerAddress: Full address of the buyer
-- importerNui: NUI, NIPT, VAT number, or Tax ID of the importer
-- invoiceNumber: Invoice number / reference number (e.g. "PFL2601")
+- importerNui: NUI, NIPT, VAT number, Tax ID of the importer
+- invoiceNumber: Invoice number / reference (e.g. "PFL2601")
 - invoiceDate: Invoice date in original format (e.g. "06.02.2026")
 - containerNumber: Container number (e.g. "CAIU7808456")
 - incoterm: Delivery terms (e.g. "FOB NINGBO", "CIF DURRES")
-- portOfLoading: Port of loading / departure port (e.g. "NINGBO")
-- portOfDischarge: Port of discharge / arrival port (e.g. "DURRES")
-- placeOfDelivery: Place of delivery (e.g. "KOSOVA")
-- countryOfOrigin: Country where goods are produced (e.g. "CN" or "CHINA")
+- portOfLoading: Port of loading (e.g. "NINGBO")
+- portOfDischarge: Port of discharge (e.g. "DURRES")
+- placeOfDelivery: Final delivery place (e.g. "KOSOVA")
+- countryOfOrigin: Country where goods are produced (e.g. "CN")
 - countryOfExport: Country goods are exported from (e.g. "CN")
-- countryOfDestination: Destination country (e.g. "XK" or "KOSOVO")
+- countryOfDestination: Destination country (e.g. "XK")
 - currency: Currency code (e.g. "EUR", "USD")
-- totalInvoice: Total invoice amount as a number (e.g. 68869.16)
-- totalGrossWeight: Total gross weight in kg as a number (e.g. 11200)
-- totalPackages: Total number of packages/cartons as a number (e.g. 562)
-- totalVolume: Total volume in cubic meters as a number (e.g. 68.00)
-- transportMode: Mode of transport (e.g. "SEA", "ROAD", "AIR")
+- totalInvoice: Total invoice amount as number (e.g. 68869.16)
+- totalGrossWeight: Total gross weight in kg as number (e.g. 11200)
+- totalPackages: Total packages/cartons as number (e.g. 562)
+- totalVolume: Total volume in m³ as number (e.g. 68.00)
+- transportMode: Mode of transport (e.g. "SEA")
 - transportIdentity: Vehicle/vessel ID if present
 - cmrNumber: CMR number if present
 - vehiclePlate: Vehicle plate if present
 
-For items, extract EVERY single line item from the table:
-- itemNo: Item mark / article number (e.g. "F2-1--5")
-- descriptionEn: Full product description in English
-- qty: Quantity as a number
-- unit: Unit of measurement (PCS, SET, CTN, KG, M, etc.)
-- unitPrice: Unit price as a number
-- totalValue: Total value as a number
-- packages: Number of cartons/packages as a number
-- grossWeight: Gross weight in kg as a number
-- netWeight: Net weight in kg as a number (0 if not present)
-- volume: Volume in cubic meters as a number (0 if not present)
+Return ONLY: { "header": { ... } }`
 
-Return ONLY valid JSON in this exact format — no extra text, no markdown:
-{
-  "header": {
-    "exporterName": "", "exporterAddress": "", "importerName": "", "importerAddress": "",
-    "importerNui": "", "invoiceNumber": "", "invoiceDate": "", "containerNumber": "",
-    "incoterm": "", "portOfLoading": "", "portOfDischarge": "", "placeOfDelivery": "",
-    "countryOfExport": "", "countryOfOrigin": "", "countryOfDestination": "",
-    "currency": "", "totalInvoice": 0, "totalGrossWeight": 0, "totalPackages": 0,
-    "totalVolume": 0, "transportMode": "", "transportIdentity": "", "cmrNumber": "", "vehiclePlate": ""
-  },
-  "items": [
-    {
-      "itemNo": "", "descriptionEn": "", "qty": 0, "unit": "", "unitPrice": 0,
-      "totalValue": 0, "packages": 0, "grossWeight": 0, "netWeight": 0, "volume": 0
-    }
-  ]
-}
+/* ── Items extraction prompt — Invoice + Packing List merge ─── */
+// This prompt explicitly handles the common case where a PDF contains BOTH:
+// - A Commercial Invoice table (prices, values, quantities)
+// - A Packing List table (packages/cartons, gross weight, volume)
+// The two tables share Item Numbers as the merge key.
+const ITEMS_PROMPT = `You are an expert customs document data extractor.
 
-IMPORTANT: Extract ALL line items. Do not skip any rows. Use 0 for missing numbers, "" for missing strings.`
+CRITICAL: This document may contain MULTIPLE tables spread across multiple pages:
+1. A COMMERCIAL INVOICE table — has: Item No., Description, Quantity, Unit Price, Total Value
+2. A PACKING LIST table — has: Item No., Description, QTY, Package/CTN, G.W., MEAS./CBM
+
+These tables SHARE the same Item Numbers (e.g. F2-1--5, F3-1, F3-2,-4).
+You MUST look at ALL pages, find BOTH tables, and MERGE their data by Item No.
+
+COLUMN ALIASES (all mean the same):
+- Packages/Cartons: PACKAGE, PACKAGES, CTN, CARTON, CARTONS, NO. OF CARTONS, PAKO, PKG, NO.OF CTN
+- Gross Weight: G.W, GW, G.W.(KGS), GROSS WEIGHT, BRUTO, WEIGHT, KG
+- Volume/Measurement: MEAS., MEAS, MEASUREMENT, CBM, M3, M³, VOLUME, VOLUMI, CB.M
+- Quantity: QTY, QUANTITY, SASIA, PCS, SET, PRS, PIECES, UNITS
+- Item Number: ITEM NO., ITEM NO, MARK, NO., REF
+
+MERGE PROCEDURE:
+Step 1 — Find the Packing List (look on EVERY page — it often starts on page 2 or 3)
+Step 2 — Find the Commercial Invoice
+Step 3 — For EACH item, combine data from both:
+  - itemNo, descriptionEn, qty, unit, unitPrice, totalValue → from Commercial Invoice
+  - packages, grossWeight, netWeight, volume → from Packing List (match by Item No.)
+
+EXAMPLE OF CORRECT MERGE:
+Invoice:      F2-1--5 | CAR AROMATHERAPY PAPER TABLET | 15600 PCS | €0.11 | €1716.00
+Packing List: F2-1--5 | CAR AROMATHERAPY PAPER TABLET | 15600 | 13 CTN | 221 KG | 0.91 CBM
+Merged result: { itemNo:"F2-1--5", descriptionEn:"CAR AROMATHERAPY PAPER TABLET", qty:15600, unit:"PCS", unitPrice:0.11, totalValue:1716.00, packages:13, grossWeight:221, netWeight:221, volume:0.91 }
+
+Another example:
+Invoice:      F3-2,-4 | CERAMIC PLATE | 216 PCS | €0.86 | €185.76
+Packing List: F3-2,-4 | CERAMIC PLATE | 216 | 6 CTN | 125.7 KG | 0.20 CBM
+Merged result: { itemNo:"F3-2,-4", descriptionEn:"CERAMIC PLATE", qty:216, unit:"PCS", unitPrice:0.86, totalValue:185.76, packages:6, grossWeight:125.7, netWeight:125.7, volume:0.20 }
+
+STRICT RULES:
+- DO NOT leave packages=0 or grossWeight=0 if the Packing List has these values
+- DO NOT report weight/packages as missing — search ALL pages first
+- If a Packing List row covers multiple items (e.g. "F3-1,F3-2"), assign shared data to each matching item
+- Extract ALL items — do not skip any Invoice rows
+- Use 0 only if the value is genuinely absent in ALL tables after searching all pages
+
+Return ONLY: { "items": [ { "itemNo":"", "descriptionEn":"", "qty":0, "unit":"", "unitPrice":0, "totalValue":0, "packages":0, "grossWeight":0, "netWeight":0, "volume":0 }, ... ] }
+
+No extra text. No markdown. Pure JSON.`
+
+/* ── Legacy combined prompt (kept for extractWithText fallback) ─ */
+const EXTRACTION_PROMPT = `${HEADER_PROMPT}
+
+Also extract ALL line items. Use the ITEMS_PROMPT rules for merging Invoice + Packing List.
+
+Return ONLY valid JSON: { "header": {...}, "items": [...] }`
 
 /* ── Build InvoiceItem array from AI response ────────────────── */
 function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<InvoiceItem>[] }): InvoiceItem[] {
@@ -250,24 +278,18 @@ export async function extractWithPdf(
     ]
 
     // ── Call 1: header only (fast, never truncated) ──────────
-    const headerPrompt = `${EXTRACTION_PROMPT}
-
-IMPORTANT: Return ONLY the "header" object — no "items" array needed.
-Return JSON: { "header": { ... } }`
-
     const { raw: headerRaw } = await callOpenAIRaw(apiKey, 'gpt-4o-mini', [
-      { type: 'text', text: headerPrompt },
+      { type: 'text', text: HEADER_PROMPT },
       ...attachments,
     ])
     const headerParsed = parseJSON(headerRaw)
 
-    // ── Call 2: items only (may be large for big invoices) ───
-    const itemsPrompt = `Extract ONLY the line items from this invoice. Return a JSON array.
-Return ONLY: { "items": [ { "itemNo":"", "descriptionEn":"", "qty":0, "unit":"", "unitPrice":0, "totalValue":0, "packages":0, "grossWeight":0, "netWeight":0, "volume":0 }, ... ] }
-Extract ALL items — do not skip any. Use 0 for missing numbers.`
-
+    // ── Call 2: items with Invoice+PackingList merge logic ───
+    // ITEMS_PROMPT explicitly tells GPT to look at ALL pages,
+    // find BOTH the Invoice and Packing List tables,
+    // and merge them by Item No. to get packages/weight/volume.
     const { raw: itemsRaw, truncated } = await callOpenAIRaw(apiKey, 'gpt-4o-mini', [
-      { type: 'text', text: itemsPrompt },
+      { type: 'text', text: ITEMS_PROMPT },
       ...attachments,
     ])
 
