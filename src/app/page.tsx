@@ -782,7 +782,7 @@ export default function Home() {
             )}
 
             {/* ══ D. DOCUMENT DATA — collapsed summary ══════════════ */}
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div className="card" style={{ padding: 0 }}>
               <button onClick={() => setShowDocFields(v => !v)} style={{
                 width:'100%', padding:'14px 18px',
                 display:'flex', alignItems:'center', justifyContent:'space-between',
