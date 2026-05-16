@@ -27,6 +27,11 @@ interface Props {
   onContinue: () => void
 }
 
+function formatProgress(value: number | undefined | null): string {
+  if (value == null || isNaN(value)) return '0%'
+  return `${Math.min(100, Math.max(0, Math.round(value)))}%`
+}
+
 /* ── Steps definition ────────────────────────────────────────── */
 const STEPS = {
   sq: [
@@ -250,7 +255,7 @@ export default function ProcessingCard({ lang, state, onRetry, onContinue }: Pro
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--t2)' }}>{currentLabel}</span>
           <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--blue)', fontVariantNumeric: 'tabular-nums' }}>
-            {progress}%
+            {formatProgress(progress)}
           </span>
         </div>
         <div style={{
@@ -259,7 +264,7 @@ export default function ProcessingCard({ lang, state, onRetry, onContinue }: Pro
         }}>
           <div style={{
             height: '100%',
-            width: `${progress}%`,
+            width: `${Math.min(100, Math.max(0, progress))}%`,
             background: `linear-gradient(90deg, var(--blue) 0%, #4B7BF5 100%)`,
             borderRadius: 99,
             transition: 'width .6s cubic-bezier(0.4, 0, 0.2, 1)',
