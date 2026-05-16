@@ -101,13 +101,20 @@ FIELD MAPPING:
 - countryOfDestination: Destination country (e.g. "XK")
 - currency: Currency code (e.g. "EUR", "USD")
 - totalInvoice: Total invoice amount as number (e.g. 68869.16)
-- totalGrossWeight: Total gross weight in kg as number (e.g. 11200)
-- totalPackages: Total packages/cartons as number (e.g. 562)
-- totalVolume: Total volume in m³ as number (e.g. 68.00)
-- transportMode: Mode of transport (e.g. "SEA")
-- transportIdentity: Vehicle/vessel ID if present
-- cmrNumber: CMR number if present
-- vehiclePlate: Vehicle plate if present
+- totalGrossWeight: Total gross weight in kg as number — ONLY if explicitly written in the document (e.g. "11200 kg"). If not found → 0
+- totalPackages: Total packages/cartons as number — ONLY if explicitly written (e.g. "562 CTN"). If not found → 0
+- totalVolume: Total volume in m³ — ONLY if explicitly written (e.g. "68.00 CBM"). If not found → 0
+- transportMode: Mode of transport — ONLY if written in document. If not found → ""
+- transportIdentity: Vehicle/vessel ID — ONLY if written. If not found → ""
+- cmrNumber: CMR number — ONLY if written. If not found → ""
+- vehiclePlate: Vehicle plate — ONLY if written. If not found → ""
+
+CRITICAL — NEVER INVENT DATA:
+- If a field is not present in the document, use 0 (for numbers) or "" (for strings)
+- NEVER estimate, guess, or calculate totalGrossWeight or totalPackages from item data
+- NEVER use internal product codes as weight or package values
+- If the document has no Packing List and no explicit weight/package totals → totalGrossWeight=0, totalPackages=0
+- Only extract values that are LITERALLY written in the document
 
 Return ONLY: { "header": { ... } }`
 

@@ -360,21 +360,6 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
           ))}
         </div>
 
-        {/* Bulk confirm button */}
-        {reviewCount > 0 && (
-          <button
-            onClick={() => setShowDialog(true)}
-            className="btn btn-primary"
-            style={{ height: 36, padding: '0 14px', fontSize: 13, gap: 6, background: 'var(--green)', boxShadow: '0 1px 4px rgba(5,150,105,.3)' }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#047857' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'var(--green)' }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            {sq ? `Konfirmo të gjitha kodet e propozuara (${reviewCount})` : `Confirm all proposed codes (${reviewCount})`}
-          </button>
-        )}
       </div>
 
       {/* ── Success toast ── */}
@@ -518,50 +503,16 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                   {pro && <td className={cellClass}><input type="number" className={numInputClass + ' w-16'} value={item.customsRate} onChange={e => updateItem(idx, 'customsRate', parseFloat(e.target.value) || 0)} /></td>}
                   {pro && <td className={cellClass}><input type="number" className={numInputClass + ' w-16'} value={item.vatRate} onChange={e => updateItem(idx, 'vatRate', parseFloat(e.target.value) || 0)} /></td>}
 
-                  {/* Status + actions — combined, no separate delete column */}
+                  {/* Status + delete — no per-row confirm button */}
                   <td className={cellClass} style={{ verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
-
-                      {/* Status badge */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <StatusBadge status={cs} lang={lang} />
-
-                      {/* Confirm button (review with code) */}
-                      {item.status === 'review' && item.tariffCode && (
-                        <button onClick={() => confirmCode(idx)}
-                          title={sq ? 'Konfirmo kodin tarifor' : 'Confirm tariff code'}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                            padding: '2px 8px', borderRadius: 6, fontSize: 10.5, fontWeight: 700,
-                            border: '1px solid var(--green-bdr)', background: 'var(--green-bg)',
-                            color: 'var(--green)', cursor: 'pointer', whiteSpace: 'nowrap',
-                          }}>
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                          {sq ? 'Konfirmo' : 'Confirm'}
-                        </button>
-                      )}
-
-                      {/* Unconfirm (confirmed items) */}
-                      {item.status === 'confirmed' && (
-                        <button onClick={() => unconfirmCode(idx)}
-                          style={{ padding:'2px 7px', borderRadius:6, border:'1px solid var(--border)', background:'var(--surface-3)', color:'var(--t4)', cursor:'pointer', fontSize:10.5 }}>
-                          {sq ? 'Undo' : 'Undo'}
-                        </button>
-                      )}
-
-                      {/* In pro view: verbose issue labels */}
-                      {pro && missingIss.map(iss => (
-                        <span key={iss.field} style={{ fontSize: 10, color: 'var(--red)', fontWeight: 700 }}>
-                          {sq ? `Mungon: ${iss.labelSq.replace(' mungon','').replace(' mungojnë','')}` : `Missing: ${iss.labelEn.replace(' missing','')}`}
-                        </span>
-                      ))}
-
-                      {/* Delete — always last, no separate column */}
                       <button onClick={() => removeItem(idx)}
                         style={{
                           width: 24, height: 24, borderRadius: 6, border: '1px solid var(--border)',
                           background: 'var(--surface-3)', color: 'var(--t4)', cursor: 'pointer',
                           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          transition: 'all .15s', marginLeft: 2, flexShrink: 0,
+                          transition: 'all .15s', flexShrink: 0,
                         }}
                         onMouseEnter={e => { e.currentTarget.style.background='var(--red-bg)'; e.currentTarget.style.color='var(--red)'; e.currentTarget.style.borderColor='var(--red-bdr)'; }}
                         onMouseLeave={e => { e.currentTarget.style.background='var(--surface-3)'; e.currentTarget.style.color='var(--t4)'; e.currentTarget.style.borderColor='var(--border)'; }}>
@@ -592,6 +543,22 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
           )}
         </table>
       </div>
+
+      {/* Bulk confirm — below table, only when review codes exist */}
+      {reviewCount > 0 && (
+        <button
+          onClick={() => setShowDialog(true)}
+          className="btn btn-primary"
+          style={{ width: '100%', height: 46, fontSize: 14, gap: 8, background: 'var(--green)', boxShadow: '0 1px 4px rgba(5,150,105,.3)', borderRadius: 12 }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#047857' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'var(--green)' }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          {sq ? `Konfirmo të gjitha kodet e propozuara (${reviewCount})` : `Confirm all proposed codes (${reviewCount})`}
+        </button>
+      )}
 
       <button
         onClick={addItem}
