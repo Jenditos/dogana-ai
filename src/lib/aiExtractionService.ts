@@ -259,8 +259,8 @@ async function callOpenAIRaw(
   const body: Record<string, unknown> = {
     model,
     messages: [{ role: 'user', content }],
-    // Force JSON output for extraction models — prevents extra prose
-    response_format: { type: 'json_object' },
+    // response_format omitted: incompatible with file/image inputs in gpt-5.5
+    // JSON output is enforced via the prompt ("Return ONLY: { ... }")
   }
   if (maxTokens) body.max_completion_tokens = maxTokens
 
