@@ -204,6 +204,10 @@ function BulkConfirmDialog({ lang, toConfirm, missing, invalid, onCancel, onConf
 export default function ItemsTable({ lang, items, onChange }: Props) {
   const sq = lang === 'sq'
 
+  // View mode: simple shows key columns only, pro shows all
+  type ViewMode = 'simple' | 'pro'
+  const [viewMode, setViewMode]         = useState<ViewMode>('simple')
+
   // Filter state
   type FilterType = 'all' | 'missing' | 'review' | 'confirmed'
   const [filterStatus, setFilterStatus] = useState<FilterType>('all')
@@ -342,6 +346,20 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
           ))}
         </div>
 
+        {/* View mode toggle */}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {(['simple', 'pro'] as const).map(mode => (
+            <button key={mode} onClick={() => setViewMode(mode)} style={{
+              padding: '5px 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+              border: `1.5px solid ${viewMode === mode ? 'var(--blue-200)' : 'var(--border)'}`,
+              background: viewMode === mode ? 'var(--blue-50)' : 'var(--surface)',
+              color: viewMode === mode ? 'var(--blue)' : 'var(--t3)',
+            }}>
+              {mode === 'simple' ? (sq ? 'Pamje e thjeshtë' : 'Simple') : (sq ? 'Pamje profesionale' : 'Pro')}
+            </button>
+          ))}
+        </div>
+
         {/* Bulk confirm button */}
         {reviewCount > 0 && (
           <button
@@ -388,21 +406,22 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
 
       <div className="overflow-x-auto rounded-xl border border-gray-200">
         <table className="w-full text-sm">
+          {/* Simple view: 7 key columns. Pro: all 15 columns */}
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">#</th>
-              <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Item No.</th>
-              <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap min-w-48">{t(lang, 'table.descEn')}</th>
-              <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap min-w-40">{t(lang, 'table.descSq')}</th>
+              {viewMode === 'pro' && <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">Item No.</th>}
+              <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap min-w-48">{sq ? 'Artikulli' : 'Article'}</th>
+              {viewMode === 'pro' && <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap min-w-40">{t(lang, 'table.descSq')}</th>}
               <th className="px-3 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">{t(lang, 'table.qty')}</th>
-              <th className="px-3 py-3 text-left font-semibold text-gray-600">{t(lang, 'table.unit')}</th>
-              <th className="px-3 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">{t(lang, 'table.unitPrice')}</th>
+              {viewMode === 'pro' && <th className="px-3 py-3 text-left font-semibold text-gray-600">{t(lang, 'table.unit')}</th>}
+              {viewMode === 'pro' && <th className="px-3 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">{t(lang, 'table.unitPrice')}</th>}
               <th className="px-3 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">{t(lang, 'table.totalValue')}</th>
-              <th className="px-3 py-3 text-right font-semibold text-gray-600">{t(lang, 'table.packages')}</th>
-              <th className="px-3 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">{t(lang, 'table.grossWeight')}</th>
-              <th className="px-3 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">{t(lang, 'table.netWeight')}</th>
+              {viewMode === 'pro' && <th className="px-3 py-3 text-right font-semibold text-gray-600">{t(lang, 'table.packages')}</th>}
+              <th className="px-3 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">{sq ? 'Pesha (kg)' : 'Weight (kg)'}</th>
+              {viewMode === 'pro' && <th className="px-3 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">{t(lang, 'table.netWeight')}</th>}
               <th className="px-3 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">{t(lang, 'table.tariffCode')}</th>
-              <th className="px-3 py-3 text-right font-semibold text-gray-600">{t(lang, 'table.customsRate')}</th>
+              {viewMode === 'pro' && <th className="px-3 py-3 text-right font-semibold text-gray-600">{t(lang, 'table.customsRate')}</th>}
               <th className="px-3 py-3 text-right font-semibold text-gray-600">{t(lang, 'table.vatRate')}</th>
               <th className="px-3 py-3 text-center font-semibold text-gray-600">{t(lang, 'table.status')}</th>
               <th className="px-3 py-3"></th>
@@ -420,23 +439,21 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                           : cs === 'review'  ? 'bg-yellow-50'
                           : ''
 
-              // Helper: red border on a cell if that field is in missing issues
-              const cellHasIssue = (field: string) => issues.some(i => i.field === field)
-              const issueBorder  = (field: string) =>
-                cellHasIssue(field)
-                  ? '1.5px solid var(--red)'
-                  : ''
+              // Per-cell border: red for missing, orange for review
+              // NEVER confuse the two — orange ≠ red for customs correctness
+              const cellIssue    = (field: string) => issues.find(i => i.field === field)
+              const cellHasIssue = (field: string) => !!cellIssue(field)
+              const issueBorder  = (field: string) => {
+                const iss = cellIssue(field)
+                if (!iss) return ''
+                return iss.type === 'missing' ? '1.5px solid var(--red)' : '1.5px solid var(--amber)'
+              }
 
+              const pro = viewMode === 'pro'
               return (
                 <tr key={item.id} className={rowBg}>
                   <td className={cellClass + ' font-medium text-gray-500'}>{idx + 1}</td>
-                  <td className={cellClass}>
-                    <input
-                      className={inputClass + ' w-20'}
-                      value={item.itemNo}
-                      onChange={e => updateItem(idx, 'itemNo', e.target.value)}
-                    />
-                  </td>
+                  {pro && <td className={cellClass}><input className={inputClass + ' w-20'} value={item.itemNo} onChange={e => updateItem(idx, 'itemNo', e.target.value)} /></td>}
                   <td className={cellClass}>
                     <input
                       className={inputClass + ' min-w-48'}
@@ -444,13 +461,7 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                       onChange={e => updateItem(idx, 'descriptionEn', e.target.value)}
                     />
                   </td>
-                  <td className={cellClass}>
-                    <input
-                      className={inputClass + ' min-w-40'}
-                      value={item.descriptionSq}
-                      onChange={e => updateItem(idx, 'descriptionSq', e.target.value)}
-                    />
-                  </td>
+                  {pro && <td className={cellClass}><input className={inputClass + ' min-w-40'} value={item.descriptionSq} onChange={e => updateItem(idx, 'descriptionSq', e.target.value)} /></td>}
                   <td className={cellClass}>
                     <input
                       type="number"
@@ -461,21 +472,8 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                       onChange={e => updateItem(idx, 'qty', parseFloat(e.target.value) || 0)}
                     />
                   </td>
-                  <td className={cellClass}>
-                    <input
-                      className={inputClass + ' w-16'}
-                      value={item.unit}
-                      onChange={e => updateItem(idx, 'unit', e.target.value)}
-                    />
-                  </td>
-                  <td className={cellClass}>
-                    <input
-                      type="number"
-                      className={numInputClass}
-                      value={item.unitPrice}
-                      onChange={e => updateItem(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
-                    />
-                  </td>
+                  {pro && <td className={cellClass}><input className={inputClass + ' w-16'} value={item.unit} onChange={e => updateItem(idx, 'unit', e.target.value)} /></td>}
+                  {pro && <td className={cellClass}><input type="number" className={numInputClass} value={item.unitPrice} onChange={e => updateItem(idx, 'unitPrice', parseFloat(e.target.value) || 0)} /></td>}
                   <td className={cellClass}>
                     <input
                       type="number"
@@ -486,34 +484,27 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                       onChange={e => updateItem(idx, 'totalValue', parseFloat(e.target.value) || 0)}
                     />
                   </td>
+                  {pro && (
+                    <td className={cellClass}>
+                      <input type="number" className={numInputClass} style={{ outline: issueBorder('packages') }}
+                        title={cellHasIssue('packages') ? (sq ? 'Paketime mungojnë' : 'Packages missing') : undefined}
+                        value={item.packages} onChange={e => updateItem(idx, 'packages', parseInt(e.target.value) || 0)} />
+                    </td>
+                  )}
                   <td className={cellClass}>
-                    <input
-                      type="number"
-                      className={numInputClass}
-                      style={{ outline: issueBorder('packages') }}
-                      title={cellHasIssue('packages') ? (sq ? 'Paketime mungojnë' : 'Packages missing') : undefined}
-                      value={item.packages}
-                      onChange={e => updateItem(idx, 'packages', parseInt(e.target.value) || 0)}
-                    />
-                  </td>
-                  <td className={cellClass}>
-                    <input
-                      type="number"
-                      className={numInputClass}
+                    <input type="number" className={numInputClass}
                       style={{ outline: issueBorder('grossWeight') }}
                       title={cellHasIssue('grossWeight') ? (sq ? 'Pesha bruto mungon' : 'Gross weight missing') : undefined}
                       value={item.grossWeight}
                       onChange={e => updateItem(idx, 'grossWeight', parseFloat(e.target.value) || 0)}
                     />
                   </td>
-                  <td className={cellClass}>
-                    <input
-                      type="number"
-                      className={numInputClass}
-                      value={item.netWeight}
-                      onChange={e => updateItem(idx, 'netWeight', parseFloat(e.target.value) || 0)}
-                    />
-                  </td>
+                  {pro && (
+                    <td className={cellClass}>
+                      <input type="number" className={numInputClass} value={item.netWeight}
+                        onChange={e => updateItem(idx, 'netWeight', parseFloat(e.target.value) || 0)} />
+                    </td>
+                  )}
                   <td className={cellClass}>
                     <input
                       className={inputClass + ' w-28'}
@@ -521,17 +512,11 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                       title={cellHasIssue('tariffCode') ? (sq ? 'Kodi tarifor mungon' : 'Tariff code missing') : undefined}
                       value={item.tariffCode}
                       onChange={e => updateItem(idx, 'tariffCode', e.target.value)}
-                      placeholder="0000000000"
+                      placeholder={sq ? 'Shkruaj kodin' : 'Enter code'}
                     />
                   </td>
-                  <td className={cellClass}>
-                    <input type="number" className={numInputClass + ' w-16'} value={item.customsRate}
-                      onChange={e => updateItem(idx, 'customsRate', parseFloat(e.target.value) || 0)} />
-                  </td>
-                  <td className={cellClass}>
-                    <input type="number" className={numInputClass + ' w-16'} value={item.vatRate}
-                      onChange={e => updateItem(idx, 'vatRate', parseFloat(e.target.value) || 0)} />
-                  </td>
+                  {pro && <td className={cellClass}><input type="number" className={numInputClass + ' w-16'} value={item.customsRate} onChange={e => updateItem(idx, 'customsRate', parseFloat(e.target.value) || 0)} /></td>}
+                  {pro && <td className={cellClass}><input type="number" className={numInputClass + ' w-16'} value={item.vatRate} onChange={e => updateItem(idx, 'vatRate', parseFloat(e.target.value) || 0)} /></td>}
 
                   {/* Status + Issue summary + Confirm button */}
                   <td className={cellClass} style={{ verticalAlign: 'middle' }}>
@@ -540,20 +525,17 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
                       <StatusBadge status={cs} lang={lang} />
 
                       {/* Issue summary badge */}
-                      {(missingIss.length > 0 || reviewIss.length > 0) && (
-                        <span style={{
-                          fontSize: 10.5, lineHeight: 1.3,
-                          color: missingIss.length > 0 ? 'var(--red)' : 'var(--amber)',
-                          display: 'flex', flexDirection: 'column', gap: 1,
-                        }}>
-                          {missingIss.length > 0 && (
-                            <span>{missingIss.length} {sq ? (missingIss.length === 1 ? 'fushë mungon' : 'fusha mungojnë') : (missingIss.length === 1 ? 'field missing' : 'fields missing')}</span>
-                          )}
-                          {reviewIss.length > 0 && missingIss.length === 0 && (
-                            <span>{reviewIss.length} {sq ? 'për kontroll' : 'to review'}</span>
-                          )}
+                      {/* Issue labels: "Mungon: X" or "Për kontroll: X" per field */}
+                      {missingIss.map(iss => (
+                        <span key={iss.field} style={{ fontSize: 10.5, color: 'var(--red)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                          {sq ? `Mungon: ${iss.labelSq.replace(' mungon','').replace(' mungojnë','')}` : `Missing: ${iss.labelEn.replace(' missing','')}`}
                         </span>
-                      )}
+                      ))}
+                      {reviewIss.map(iss => (
+                        <span key={iss.field} style={{ fontSize: 10.5, color: 'var(--amber)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                          {sq ? `Për kontroll: ${iss.labelSq.replace(' për kontroll','')}` : `Review: ${iss.labelEn.replace(' needs review','')}`}
+                        </span>
+                      ))}
 
                       {/* Confirm button: show for 'review' items that have a code */}
                       {item.status === 'review' && item.tariffCode && (

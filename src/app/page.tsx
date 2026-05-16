@@ -494,13 +494,40 @@ export default function Home() {
     setStep('review')
   }
 
-  // 'missing' = field is completely empty — must be filled before export
-  // 'review'  = field has a value (auto-suggested) — needs human confirmation
-  // A field cannot be both: review items have a tariffCode, missing items don't
-  const missingCount = missingFields.filter(m => m.status === 'missing').length
-  const reviewCount  = items.filter(i => i.status === 'review').length   // has code, needs confirm
-  const okCount      = items.filter(i => i.status === 'ok').length
   const sq = lang === 'sq'
+
+  // ── Count fields vs. rows (must be consistent across UI) ──
+  // missingFieldCount: total number of missing field occurrences
+  const missingFieldCount = missingFields.filter(m => m.status === 'missing').length
+  // missingRowCount: number of ROWS that have at least one missing field
+  const packingListFound  = items.some(i => i.grossWeight > 0)
+  const missingRowCount   = items.filter(item => {
+    if (!item.tariffCode) return true
+    if (!item.qty || item.qty === 0) return true
+    if (!item.totalValue || item.totalValue === 0) return true
+    if (packingListFound && (!item.grossWeight || item.grossWeight === 0)) return true
+    return false
+  }).length
+  // reviewCount: items with a proposed tariff code that needs confirmation
+  const reviewCount  = items.filter(i => i.status === 'review' && i.tariffCode).length
+  const okCount      = items.filter(i => i.status === 'ok' || i.status === 'confirmed').length
+  // For backward compat (stepper badge)
+  const missingCount = missingRowCount
+
+  // ── Group missing fields by type for the error box ──
+  const missingByType = {
+    tariffCode:  missingFields.filter(m => m.field.toLowerCase().includes('tarifor')).length,
+    grossWeight: missingFields.filter(m => m.field.toLowerCase().includes('pesha')).length,
+    qty:         missingFields.filter(m => m.field.toLowerCase().includes('sasi')).length,
+    value:       missingFields.filter(m => m.field.toLowerCase().includes('vler')).length,
+    header:      missingFields.filter(m => !m.item).length,
+  }
+
+  // ── Diff warnings: form total vs. row sums ──
+  const sumWeight  = items.reduce((s, i) => s + i.grossWeight, 0)
+  const sumPkgs    = items.reduce((s, i) => s + i.packages, 0)
+  const weightDiff = header.totalGrossWeight && Math.abs((header.totalGrossWeight || 0) - sumWeight) > 0.5
+  const pkgDiff    = header.totalPackages    && Math.abs((header.totalPackages    || 0) - sumPkgs)   > 0
 
   /* ── trust chips data ── */
   const trustChips = sq
@@ -669,102 +696,112 @@ export default function Home() {
         {step === 'review' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }} className="a-fade-up">
 
-            {/* Stats row */}
+            {/* ── Stats row — fields vs. rows clearly labeled ── */}
             {items.length > 0 && (
-              <div className="a-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                  <StatCard
-                    value={items.length}
-                    label={sq ? 'Artikuj të lexuar' : 'Items read'}
-                    subtitle={sq ? 'Nga dokumenti' : 'From document'}
-                    color="blue"
-                  />
-                  <StatCard
-                    value={positions.length}
-                    label={sq ? 'Pozicione ASYCUDA' : 'ASYCUDA positions'}
-                    subtitle={sq ? 'Grupe sipas kodit tarifor' : 'Grouped by tariff code'}
-                    color="green"
-                  />
-                  <StatCard
-                    value={missingCount}
-                    label={sq ? 'Të dhëna mungojnë' : 'Data missing'}
-                    subtitle={sq ? 'Duhet të plotësohen para eksportit' : 'Must be filled before export'}
-                    color={missingCount > 0 ? 'red' : 'green'}
-                  />
-                  <StatCard
-                    value={reviewCount}
-                    label={sq ? 'Të dhëna për kontroll' : 'Data to review'}
-                    subtitle={sq ? 'Janë gjetur, por duhet verifikuar' : 'Found, but should be verified'}
-                    color={reviewCount > 0 ? 'amber' : 'green'}
-                  />
-                </div>
+              <div className="a-fade-in" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <StatCard value={items.length}     label={sq ? 'rreshta fature'       : 'invoice rows'}         subtitle={sq ? 'nga dokumenti'             : 'from document'}            color="blue" />
+                <StatCard value={positions.length} label={sq ? 'pozicione ASYCUDA'    : 'ASYCUDA positions'}    subtitle={sq ? 'grupe sipas kodit tarifor'  : 'grouped by tariff code'}    color="green" />
+                <StatCard value={missingRowCount}  label={sq ? 'rreshta me mungesa'   : 'rows with missing'}    subtitle={sq ? 'plotëso para eksportit'    : 'fill before export'}         color={missingRowCount > 0 ? 'red' : 'green'} />
+                <StatCard value={reviewCount}      label={sq ? 'kode për kontroll'    : 'codes to review'}      subtitle={sq ? 'propozuar, duhet konfirmuar': 'proposed, needs confirm'}    color={reviewCount > 0 ? 'amber' : 'green'} />
+              </div>
+            )}
 
-                {/* Legend — always shown when there's something to explain */}
-                {(missingCount > 0 || reviewCount > 0) && (
-                  <div style={{
-                    display: 'flex', gap: 20, flexWrap: 'wrap',
-                    padding: '10px 14px', borderRadius: 10,
-                    background: 'var(--surface-2)', border: '1px solid var(--border)',
-                    fontSize: 12, color: 'var(--t3)', lineHeight: 1.5,
-                  }}>
-                    {missingCount > 0 && (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--red)', flexShrink: 0 }} />
-                        <strong style={{ color: 'var(--t2)' }}>{sq ? '"Mungon"' : '"Missing"'}</strong>
-                        {sq ? ' = fusha është bosh dhe obligative.' : ' = field is empty and required.'}
-                      </span>
-                    )}
-                    {reviewCount > 0 && (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }} />
-                        <strong style={{ color: 'var(--t2)' }}>{sq ? '"Për kontroll"' : '"Review"'}</strong>
-                        {sq ? ' = vlera është propozuar automatikisht, por duhet verifikuar.' : ' = value was auto-suggested, please verify.'}
-                      </span>
-                    )}
+            {/* ── Color legend ── */}
+            {items.length > 0 && (missingRowCount > 0 || reviewCount > 0) && (
+              <div style={{
+                display: 'flex', gap: 18, flexWrap: 'wrap', padding: '9px 14px', borderRadius: 10,
+                background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 12, color: 'var(--t3)',
+              }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--red)', flexShrink: 0 }} />
+                  <strong style={{ color: 'var(--t2)' }}>{sq ? 'E kuqe' : 'Red'}</strong>
+                  {sq ? ' — plotëso para se të vazhdosh.' : ' — fill before you can continue.'}
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }} />
+                  <strong style={{ color: 'var(--t2)' }}>{sq ? 'Portokalli' : 'Orange'}</strong>
+                  {sq ? ' — kontrollo dhe konfirmo.' : ' — check and confirm.'}
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--green)', flexShrink: 0 }} />
+                  <strong style={{ color: 'var(--t2)' }}>{sq ? 'Gjelbër' : 'Green'}</strong>
+                  {sq ? ' — gati.' : ' — ready.'}
+                </span>
+              </div>
+            )}
+
+            {/* ── Grouped error box (no long item lists) ── */}
+            {missingRowCount > 0 && (
+              <div style={{
+                background: 'var(--red-bg)', border: '1.5px solid var(--red-bdr)', borderRadius: 14, overflow: 'hidden',
+              }}>
+                <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                  <span style={{ color: 'var(--red)', marginTop: 1, flexShrink: 0 }}><IcoAlert /></span>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: 'var(--red)' }}>
+                      {sq ? 'Nuk mund të vazhdosh ende' : 'Cannot continue yet'}
+                    </p>
+                    <p style={{ margin: '3px 0 0', fontSize: 13, color: 'var(--red)' }}>
+                      {sq
+                        ? `Janë gjetur ${missingFieldCount} fusha që mungojnë në ${missingRowCount} rreshta.`
+                        : `Found ${missingFieldCount} missing fields in ${missingRowCount} rows.`}
+                    </p>
+                    {/* Grouped by type */}
+                    <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {missingByType.tariffCode > 0  && <span style={{ padding:'3px 10px', borderRadius:99, background:'rgba(220,38,38,.12)', color:'var(--red)', fontSize:12, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.tariffCode} {sq ? 'kode tarifore' : 'tariff codes'}</span>}
+                      {missingByType.grossWeight > 0 && <span style={{ padding:'3px 10px', borderRadius:99, background:'rgba(220,38,38,.12)', color:'var(--red)', fontSize:12, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.grossWeight} {sq ? 'pesha bruto' : 'gross weights'}</span>}
+                      {missingByType.qty > 0          && <span style={{ padding:'3px 10px', borderRadius:99, background:'rgba(220,38,38,.12)', color:'var(--red)', fontSize:12, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.qty} {sq ? 'sasi' : 'quantities'}</span>}
+                      {missingByType.value > 0        && <span style={{ padding:'3px 10px', borderRadius:99, background:'rgba(220,38,38,.12)', color:'var(--red)', fontSize:12, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.value} {sq ? 'vlera' : 'values'}</span>}
+                      {missingByType.header > 0       && <span style={{ padding:'3px 10px', borderRadius:99, background:'rgba(220,38,38,.12)', color:'var(--red)', fontSize:12, fontWeight:700, border:'1px solid var(--red-bdr)' }}>{missingByType.header} {sq ? 'të dhëna dokumenti' : 'document fields'}</span>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Diff warnings: form total ≠ row sums ── */}
+            {(weightDiff || pkgDiff) && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {weightDiff && header.totalGrossWeight && (
+                  <div style={{ background: 'var(--amber-bg)', border: '1.5px solid var(--amber-bdr)', borderRadius: 14, padding: '14px 18px' }}>
+                    <p style={{ margin:'0 0 8px', fontWeight:700, fontSize:13, color:'var(--amber)' }}>
+                      {sq ? 'Pesha totale nuk përputhet me totalin e rreshtave.' : 'Total weight does not match the sum of rows.'}
+                    </p>
+                    <div style={{ display:'flex', gap:16, flexWrap:'wrap', fontSize:12.5, color:'var(--t2)' }}>
+                      <span>{sq ? 'Në formular' : 'In form'}: <strong>{header.totalGrossWeight} kg</strong></span>
+                      <span>{sq ? 'Nga rreshtat' : 'From rows'}: <strong>{sumWeight.toFixed(2)} kg</strong></span>
+                      <span style={{ color:'var(--amber)', fontWeight:700 }}>Δ {Math.abs((header.totalGrossWeight || 0) - sumWeight).toFixed(2)} kg</span>
+                    </div>
+                    <div style={{ marginTop:10, display:'flex', gap:8 }}>
+                      <button onClick={() => setHeader(h => ({...h, totalGrossWeight: parseFloat(sumWeight.toFixed(2))}))} style={{ padding:'5px 12px', borderRadius:8, border:'1px solid var(--amber-bdr)', background:'var(--surface)', color:'var(--amber)', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                        {sq ? 'Përdor nga rreshtat' : 'Use from rows'} ({sumWeight.toFixed(2)})
+                      </button>
+                      <button onClick={() => {}} style={{ padding:'5px 12px', borderRadius:8, border:'1px solid var(--border)', background:'transparent', color:'var(--t4)', fontSize:12, cursor:'pointer' }}>
+                        {sq ? 'Mbaj manualen' : 'Keep manual'} ({header.totalGrossWeight})
+                      </button>
+                    </div>
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Info banner */}
-            {items.length > 0 && (
-              <div style={{
-                display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 18px',
-                background: 'var(--blue-50)', border: '1px solid var(--blue-200)', borderRadius: 14,
-              }}>
-                <span style={{ color: 'var(--blue)', marginTop: 1, flexShrink: 0 }}><IcoInfo /></span>
-                <div>
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: 13.5, color: 'var(--blue)' }}>
-                    {t(lang, 'messages.extracted')}
-                  </p>
-                  <p style={{ margin: '2px 0 0', fontSize: 12.5, color: 'var(--t3)' }}>
-                    {t(lang, 'messages.checkRed')}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Missing fields alert */}
-            {missingCount > 0 && (
-              <div style={{
-                display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 18px',
-                background: 'var(--red-bg)', border: '1px solid var(--red-bdr)', borderRadius: 14,
-              }}>
-                <span style={{ color: 'var(--red)', marginTop: 1, flexShrink: 0 }}><IcoAlert /></span>
-                <div>
-                  <p style={{ margin: 0, fontWeight: 700, fontSize: 13.5, color: 'var(--red)' }}>
-                    {t(lang, 'messages.missingData')} ({missingCount})
-                  </p>
-                  <ul style={{ margin: '6px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {missingFields.filter(m => m.status === 'missing').slice(0, 5).map((m, i) => (
-                      <li key={i} style={{ fontSize: 12.5, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--red)', display: 'inline-block', flexShrink: 0 }} />
-                        {m.problem}
-                      </li>
-                    ))}
-                    {missingCount > 5 && <li style={{ fontSize: 12, color: 'var(--t3)' }}>+ {missingCount - 5} {sq ? 'të tjera' : 'more'}</li>}
-                  </ul>
-                </div>
+                {pkgDiff && header.totalPackages && (
+                  <div style={{ background: 'var(--amber-bg)', border: '1.5px solid var(--amber-bdr)', borderRadius: 14, padding: '14px 18px' }}>
+                    <p style={{ margin:'0 0 8px', fontWeight:700, fontSize:13, color:'var(--amber)' }}>
+                      {sq ? 'Paketime totale nuk përputhen me totalin e rreshtave.' : 'Total packages do not match the sum of rows.'}
+                    </p>
+                    <div style={{ display:'flex', gap:16, flexWrap:'wrap', fontSize:12.5, color:'var(--t2)' }}>
+                      <span>{sq ? 'Në formular' : 'In form'}: <strong>{header.totalPackages}</strong></span>
+                      <span>{sq ? 'Nga rreshtat' : 'From rows'}: <strong>{sumPkgs}</strong></span>
+                      <span style={{ color:'var(--amber)', fontWeight:700 }}>Δ {Math.abs((header.totalPackages || 0) - sumPkgs)}</span>
+                    </div>
+                    <div style={{ marginTop:10, display:'flex', gap:8 }}>
+                      <button onClick={() => setHeader(h => ({...h, totalPackages: sumPkgs}))} style={{ padding:'5px 12px', borderRadius:8, border:'1px solid var(--amber-bdr)', background:'var(--surface)', color:'var(--amber)', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                        {sq ? 'Përdor nga rreshtat' : 'Use from rows'} ({sumPkgs})
+                      </button>
+                      <button onClick={() => {}} style={{ padding:'5px 12px', borderRadius:8, border:'1px solid var(--border)', background:'transparent', color:'var(--t4)', fontSize:12, cursor:'pointer' }}>
+                        {sq ? 'Mbaj manualen' : 'Keep manual'} ({header.totalPackages})
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1234,11 +1271,28 @@ export default function Home() {
               )
             })()}
 
-            {/* Next button */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 4 }}>
-              <button onClick={() => setStep('generate')} className="btn btn-primary" style={{ height: 50, padding: '0 32px', fontSize: 15, gap: 10 }}>
+            {/* Next button — blocked when mandatory fields are missing */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, paddingTop: 4 }}>
+              <button
+                onClick={() => missingRowCount > 0 ? undefined : setStep('generate')}
+                disabled={missingRowCount > 0}
+                className="btn btn-primary"
+                style={{
+                  height: 50, padding: '0 32px', fontSize: 15, gap: 10,
+                  opacity: missingRowCount > 0 ? .45 : 1,
+                  cursor: missingRowCount > 0 ? 'not-allowed' : 'pointer',
+                }}
+                title={missingRowCount > 0 ? (sq ? `Plotëso ${missingRowCount} rreshtat e kuqe para se të vazhdosh.` : `Fill ${missingRowCount} red rows before continuing.`) : undefined}
+              >
                 {sq ? 'Vazhdo' : 'Continue'} <IcoArrowRight />
               </button>
+              {missingRowCount > 0 && (
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--red)', fontWeight: 600 }}>
+                  {sq
+                    ? `Plotëso ${missingRowCount} rreshtat me mungesa për të vazhduar.`
+                    : `Fill ${missingRowCount} rows with missing data to continue.`}
+                </p>
+              )}
             </div>
           </div>
         )}

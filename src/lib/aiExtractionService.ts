@@ -143,6 +143,38 @@ Also extract ALL line items. Use the ITEMS_PROMPT rules for merging Invoice + Pa
 
 Return ONLY valid JSON: { "header": {...}, "items": [...] }`
 
+/* ── Sanitize tariff code — never store/display 00000000 ─────── */
+function sanitizeTariffCode(code: string | undefined | null): string {
+  if (!code) return ''
+  const clean = code.replace(/[\s-]/g, '')
+  if (!clean || /^0+$/.test(clean)) return ''   // all zeros = empty
+  if (!/^\d+$/.test(clean)) return ''            // non-numeric = empty
+  if (clean.length < 6) return ''               // too short = invalid
+  return clean
+}
+
+/* ── Normalize date string → DD.MM.YYYY ──────────────────────── */
+export function normalizeDate(dateStr: string): string {
+  if (!dateStr) return dateStr
+  // Already clean formats
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, d] = dateStr.split('-')
+    return `${d}.${m}.${y}`
+  }
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateStr)) return dateStr
+
+  const MONTHS: Record<string, string> = {
+    JAN:'01',FEB:'02',MAR:'03',APR:'04',MAY:'05',JUN:'06',
+    JUL:'07',AUG:'08',SEP:'09',OCT:'10',NOV:'11',DEC:'12',
+  }
+  // "6TH,FEB., 2026" | "6TH FEB 2026" | "06/02/2026"
+  const m1 = dateStr.match(/(\d{1,2})(?:ST|ND|RD|TH)?[,\s./]+([A-Z]{3})[,\.\s]+(\d{4})/i)
+  if (m1) return `${m1[1].padStart(2,'0')}.${MONTHS[m1[2].toUpperCase()] || '01'}.${m1[3]}`
+  const m2 = dateStr.match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/)
+  if (m2) return `${m2[1].padStart(2,'0')}.${m2[2].padStart(2,'0')}.${m2[3]}`
+  return dateStr  // return as-is if unparseable
+}
+
 /* ── Build InvoiceItem array from AI response ────────────────── */
 function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<InvoiceItem>[] }): InvoiceItem[] {
   const rules = getTariffRules()
@@ -167,10 +199,10 @@ function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<Invo
         grossWeight: Number(item.grossWeight) || 0,
         netWeight:   Number(item.netWeight)   || 0,
         volume:      Number(item.volume)      || 0,
-        tariffCode:  confirmed.tariffCode,
+        tariffCode:  sanitizeTariffCode(confirmed.tariffCode),
         customsRate: confirmed.cdRate,
         vatRate:     confirmed.vatRate,
-        status:      'confirmed',          // user already confirmed this code
+        status:      'confirmed',
         confirmedAt: confirmed.confirmedAt,
       }
     }
@@ -191,7 +223,7 @@ function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<Invo
       grossWeight: Number(item.grossWeight) || 0,
       netWeight:   Number(item.netWeight)   || 0,
       volume:      Number(item.volume)      || 0,
-      tariffCode:  tariffRule?.tariffCode   || '',
+      tariffCode:  sanitizeTariffCode(tariffRule?.tariffCode || ''),
       customsRate: tariffRule?.customsRate  ?? 10,
       vatRate:     tariffRule?.vatRate      ?? 18,
       requiresMaterial: tariffRule?.requiresMaterial,
@@ -318,6 +350,10 @@ export async function extractWithPdf(
       ...attachments,
     ])
     const headerParsed = parseJSON(headerRaw)
+    // Normalize date to DD.MM.YYYY for display
+    if (headerParsed.header?.invoiceDate) {
+      headerParsed.header.invoiceDate = normalizeDate(headerParsed.header.invoiceDate)
+    }
 
     // ── Call 2: items with Invoice+PackingList merge logic ───
     // ITEMS_PROMPT explicitly tells GPT to look at ALL pages,
