@@ -49,7 +49,7 @@ function hasExpectedSignature(buffer: Buffer, fileType: 'pdf' | 'image', mimeTyp
 
 export async function POST(req: NextRequest) {
   try {
-    const guarded = guardApiRequest(req, 'extract', { limit: 20, windowMs: 60 * 60 * 1000 })
+    const guarded = await guardApiRequest(req, 'extract', { limit: 20, windowMs: 60 * 60 * 1000 })
     if (guarded) return guarded
 
     const contentLength = Number(req.headers.get('content-length') || 0)

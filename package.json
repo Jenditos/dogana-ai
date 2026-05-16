@@ -21,6 +21,9 @@
     "react-dropzone": "^15.0.0",
     "unpdf": "^1.6.2"
   },
+  "overrides": {
+    "postcss": "8.5.14"
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",

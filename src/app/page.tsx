@@ -65,8 +65,8 @@ const IcoFile = () => (
 /* ─── Step Indicator ─────────────────────────────────────────── */
 type Step = 'upload' | 'review' | 'generate'
 
-function StepIndicator({ step, lang, missingCount, onClick }: {
-  step: Step; lang: Language; missingCount: number; onClick: (s: Step) => void
+function StepIndicator({ step, lang, missingCount, canGenerate, onClick }: {
+  step: Step; lang: Language; missingCount: number; canGenerate: boolean; onClick: (s: Step) => void
 }) {
   const steps: { key: Step; label: string }[] = [
     { key: 'upload',   label: lang === 'sq' ? 'Ngarko' : 'Upload' },
@@ -81,6 +81,7 @@ function StepIndicator({ step, lang, missingCount, onClick }: {
         {steps.map((s, i) => {
           const done   = i < idx
           const active = i === idx
+          const disabled = s.key === 'generate' && !canGenerate
           return (
             <div key={s.key} className="flex items-center">
               {i > 0 && (
@@ -92,13 +93,22 @@ function StepIndicator({ step, lang, missingCount, onClick }: {
                 }} />
               )}
               <button
+                disabled={disabled}
                 onClick={() => onClick(s.key)}
                 className="flex flex-col items-center gap-1.5"
-                style={{ cursor: 'pointer', border: 'none', background: 'none', padding: '0 12px' }}
+                title={disabled ? (lang === 'sq' ? 'Plotëso fushat e detyrueshme para eksportit' : 'Complete required fields before export') : undefined}
+                style={{
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  border: 'none',
+                  background: 'none',
+                  padding: '0 12px',
+                  opacity: disabled ? .55 : 1,
+                }}
               >
                 <div style={{
                   width: 32, height: 32,
                   borderRadius: '50%',
+                  position: 'relative',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontWeight: 700, fontSize: 13,
                   transition: 'all .25s var(--ease-out)',
@@ -600,7 +610,7 @@ export default function Home() {
       </header>
 
       {/* ── Step Indicator ──────────────────────────────────── */}
-      <StepIndicator step={step} lang={lang} missingCount={missingCount} onClick={goToStep} />
+      <StepIndicator step={step} lang={lang} missingCount={missingCount} canGenerate={canAdvanceToGenerate} onClick={goToStep} />
 
       {/* ── Main ────────────────────────────────────────────── */}
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px 80px' }}>

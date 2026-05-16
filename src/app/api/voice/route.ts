@@ -4,7 +4,7 @@ import { guardApiRequest } from '@/lib/requestGuards'
 
 export async function POST(req: NextRequest) {
   try {
-    const guarded = guardApiRequest(req, 'voice', { limit: 60, windowMs: 60 * 60 * 1000 })
+    const guarded = await guardApiRequest(req, 'voice', { limit: 60, windowMs: 60 * 60 * 1000 })
     if (guarded) return guarded
 
     const { transcript } = await req.json()

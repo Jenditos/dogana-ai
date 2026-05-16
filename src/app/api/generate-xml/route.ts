@@ -2,14 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { generateXml, detectOldValues } from '@/lib/xmlTemplateEngine'
 import { validateAll } from '@/lib/validationService'
 import { guardApiRequest } from '@/lib/requestGuards'
+import { validateXmlPayload } from '@/lib/schemaValidation'
 import type { HeaderData, AsycudaPosition, InvoiceItem, AppSettings } from '@/types'
 
 export async function POST(req: NextRequest) {
   try {
-    const guarded = guardApiRequest(req, 'generate-xml', { limit: 120, windowMs: 60 * 60 * 1000 })
+    const guarded = await guardApiRequest(req, 'generate-xml', { limit: 120, windowMs: 60 * 60 * 1000 })
     if (guarded) return guarded
 
     const body = await req.json()
+    const payloadValidation = validateXmlPayload(body)
+    if (!payloadValidation.ok) {
+      return NextResponse.json(
+        { error: 'Invalid XML payload', errors: payloadValidation.errors },
+        { status: 400 }
+      )
+    }
+
     const { header, items, positions, settings, forceDraft } = body as {
       header: HeaderData
       items: InvoiceItem[]
@@ -31,9 +40,12 @@ export async function POST(req: NextRequest) {
       }, { status: 422 })
     }
 
-    const xml = generateXml(header, positions, settings)
-    const oldValues = detectOldValues(xml)
     const status = forceDraft || requiresDraft ? 'draft' : 'ready'
+    const generatedXml = generateXml(header, positions, settings)
+    const xml = status === 'draft'
+      ? `<!-- DRAFT - NOT READY FOR FINAL ASYCUDA IMPORT -->\n${generatedXml}`
+      : generatedXml
+    const oldValues = detectOldValues(xml)
 
     return NextResponse.json({
       xml,

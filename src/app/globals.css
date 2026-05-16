@@ -214,6 +214,22 @@ input[type="number"] { -moz-appearance: textfield; }
 .field-input:focus { border-color: var(--blue); }
 .field-input.error { border-color: var(--red); background: var(--red-bg); }
 
+.legal-copy {
+  color: var(--t2);
+  font-size: 14px;
+  line-height: 1.75;
+}
+.legal-copy h2 {
+  margin: 26px 0 8px;
+  color: var(--t1);
+  font-size: 18px;
+  font-weight: 850;
+}
+.legal-copy p { margin: 0 0 12px; }
+.legal-copy ul { margin: 0 0 14px 20px; padding: 0; }
+.legal-copy li { margin: 6px 0; }
+.legal-copy strong { color: var(--t1); }
+
 /* ── Chip / tag ───────────────────────────────────── */
 .chip {
   display: inline-flex; align-items: center; gap: 5px;
