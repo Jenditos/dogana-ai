@@ -1,5 +1,66 @@
 import type { ExtractionResult, InvoiceItem, HeaderData } from '@/types'
 import { findTariffByKeyword, getTariffRules, getConfirmedCode } from './tariffMapper'
+import path from 'path'
+import fs from 'fs'
+
+/* ── TARIK full database — loaded once, cached in memory ────────
+ * 9,299 entries from TARIFA DOGANORE KOSOVE (TARIK 2025)
+ * Format: [code, descriptionSq, cdRate, vatRate]
+ * Used to validate + supplement AI-suggested tariff codes.
+ * ─────────────────────────────────────────────────────────────── */
+type TarikRow = [string, string, number, number]
+let tarikCache: TarikRow[] | null = null
+
+function loadTarik(): TarikRow[] {
+  if (tarikCache) return tarikCache
+  try {
+    const filePath = path.join(process.cwd(), 'src', 'data', 'tarik.json')
+    tarikCache = JSON.parse(fs.readFileSync(filePath, 'utf8')) as TarikRow[]
+    console.log(`[TARIK] Loaded ${tarikCache.length} entries`)
+  } catch (e) {
+    console.warn('[TARIK] Could not load tarik.json:', e)
+    tarikCache = []
+  }
+  return tarikCache!
+}
+
+/**
+ * Validate an AI-suggested code against the full TARIK database.
+ * Returns the best matching TARIK entry, or null if nothing fits.
+ *
+ * Priority:
+ *  1. Exact 10-digit match
+ *  2. Exact 8-digit match (sub-heading)
+ *  3. 6-digit heading match (first valid code in that heading)
+ *  4. 4-digit chapter match (first valid code in that chapter)
+ */
+function matchInTarik(aiCode: string): TarikRow | null {
+  if (!aiCode || aiCode.length < 4) return null
+  const db = loadTarik()
+  if (!db.length) return null
+
+  const clean = aiCode.replace(/\s/g, '')
+
+  // 1. Exact
+  let found = db.find(e => e[0] === clean)
+  if (found) return found
+
+  // 2. 8-digit prefix
+  if (clean.length >= 8) {
+    found = db.find(e => e[0].startsWith(clean.slice(0, 8)))
+    if (found) return found
+  }
+
+  // 3. 6-digit heading
+  if (clean.length >= 6) {
+    found = db.find(e => e[0].startsWith(clean.slice(0, 6)))
+    if (found) return found
+  }
+
+  // 4. 4-digit chapter (HS heading)
+  found = db.find(e => e[0].startsWith(clean.slice(0, 4)))
+  return found || null
+}
 
 /* ── Albanian translation dictionary ────────────────────────── */
 const ALB: Record<string, string> = {
@@ -267,33 +328,49 @@ function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<Invo
       }
     }
 
-    // ── Priority 2: keyword-based rule match ──
-    const tariffRule = findTariffByKeyword(desc, rules)
-
-    // ── Priority 3: AI-suggested code from prompt (gpt-5.5 classified it) ──
-    // The AI returns tariffCode + tariffCodeConfidence when it recognizes the product,
-    // even if the description is in a foreign language (Serbian, Chinese, etc.)
-    const aiCode    = sanitizeTariffCode((item as { tariffCode?: string }).tariffCode || '')
-    const aiCdRate  = Number((item as { cdRate?: number }).cdRate) || 10
-    const aiVatRate = Number((item as { vatRate?: number }).vatRate) || 18
+    // ── Priority 2: AI-suggested code → validated against full TARIK DB ──
+    // GPT-5.5 knows the HS nomenclature in any language.
+    // We take its suggestion and look it up in all 9,299 TARIK entries.
+    const aiRawCode = sanitizeTariffCode((item as { tariffCode?: string }).tariffCode || '')
     const aiConf    = (item as { tariffCodeConfidence?: string }).tariffCodeConfidence || ''
+    const tarikMatch = aiRawCode ? matchInTarik(aiRawCode) : null
 
-    // Determine best code: keyword rule > AI suggestion > empty
-    const finalCode = sanitizeTariffCode(tariffRule?.tariffCode || '') || aiCode
-    const finalCd   = tariffRule?.customsRate ?? (aiCode ? aiCdRate : 10)
-    const finalVat  = tariffRule?.vatRate     ?? (aiCode ? aiVatRate : 18)
+    // ── Priority 3: keyword rule (99 mapped product categories) ──
+    const tariffRule = tarikMatch ? null : findTariffByKeyword(desc, rules)
 
-    // Status logic:
-    // 'confirmed' — user confirmed (handled above)
-    // 'review'    — code found (keyword OR ai), needs user confirmation
-    // 'missing'   — no code anywhere, must be manually added
+    // Pick the best code:
+    // TARIK-validated AI code > keyword rule > raw AI code (unvalidated) > empty
+    let finalCode: string
+    let finalCd:   number
+    let finalVat:  number
+
+    if (tarikMatch) {
+      // AI code validated in TARIK — highest quality
+      finalCode = tarikMatch[0]
+      finalCd   = tarikMatch[2] || 10
+      finalVat  = tarikMatch[3] || 18
+      if (aiRawCode !== finalCode) {
+        console.log(`[TARIK] "${desc}" AI=${aiRawCode} → matched to ${finalCode} (conf:${aiConf})`)
+      }
+    } else if (tariffRule) {
+      // Keyword rule match
+      finalCode = sanitizeTariffCode(tariffRule.tariffCode)
+      finalCd   = tariffRule.customsRate ?? 10
+      finalVat  = tariffRule.vatRate     ?? 18
+    } else if (aiRawCode) {
+      // AI suggested but not in TARIK — still better than nothing
+      finalCode = aiRawCode
+      finalCd   = Number((item as { cdRate?: number }).cdRate) || 10
+      finalVat  = Number((item as { vatRate?: number }).vatRate) || 18
+      console.log(`[buildItems] "${desc}" → AI code ${aiRawCode} not found in TARIK (conf:${aiConf})`)
+    } else {
+      finalCode = ''
+      finalCd   = 10
+      finalVat  = 18
+    }
+
     const hasCode = !!finalCode
     const status  = hasCode ? 'review' : 'missing'
-
-    // Log when AI classifier provided the code (no keyword match)
-    if (!tariffRule && aiCode) {
-      console.log(`[buildItems] AI-classified "${desc}" → ${aiCode} (confidence: ${aiConf})`)
-    }
 
     return {
       id: `item_${idx + 1}`,
