@@ -790,25 +790,51 @@ export default function Home() {
             {/* ══ DIFF WARNINGS (weight/pkg mismatch) ═══════════════ */}
             {(weightDiff || pkgDiff) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {weightDiff && header.totalGrossWeight && (
+                {/* If BOTH differ and both row sums are 0 → no packing list → show one clear message */}
+                {weightDiff && pkgDiff && sumWeight === 0 && sumPkgs === 0 && (
+                  <div style={{
+                    background: 'var(--amber-bg)', border: '1.5px solid var(--amber-bdr)',
+                    borderRadius: 12, padding: '14px 18px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap',
+                  }}>
+                    <div>
+                      <p style={{ margin:'0 0 3px', fontSize:13.5, fontWeight:700, color:'var(--amber)' }}>
+                        {sq ? 'Kjo faturë nuk ka Packing List' : 'This invoice has no Packing List'}
+                      </p>
+                      <p style={{ margin:0, fontSize:12.5, color:'var(--t3)' }}>
+                        {sq
+                          ? `Pesha (${header.totalGrossWeight} kg) dhe Paketime (${header.totalPackages}) nuk janë nga dokumenti — vendos 0 ose ngarko Packing List.`
+                          : `Weight (${header.totalGrossWeight} kg) and Packages (${header.totalPackages}) are not from the document — set to 0 or upload Packing List.`}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setHeader(h => ({ ...h, totalGrossWeight: 0, totalPackages: 0 }))}
+                      style={{ padding:'8px 16px', borderRadius:9, border:'1px solid var(--amber-bdr)', background:'var(--surface)', color:'var(--amber)', fontSize:13, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}
+                    >
+                      {sq ? 'Vendos 0 të dyja' : 'Set both to 0'}
+                    </button>
+                  </div>
+                )}
+                {/* Individual warnings when row sums are not 0 */}
+                {weightDiff && header.totalGrossWeight && !(sumWeight === 0 && sumPkgs === 0 && pkgDiff) && (
                   <div style={{ background: 'var(--surface)', border: '1.5px solid var(--amber-bdr)', borderRadius: 12, padding: '12px 16px', borderLeft: '3px solid var(--amber)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
                     <span style={{ fontSize:13, color:'var(--t2)' }}>
                       {sq ? 'Pesha' : 'Weight'}: <strong>{header.totalGrossWeight}</strong> → {sq?'nga rreshtat':'from rows'}: <strong style={{color:'var(--amber)'}}>{sumWeight.toFixed(2)}</strong> <span style={{color:'var(--amber)'}}>(Δ {Math.abs((header.totalGrossWeight||0)-sumWeight).toFixed(2)} kg)</span>
                     </span>
                     <div style={{ display:'flex', gap:6 }}>
                       <button onClick={() => setHeader(h => ({...h, totalGrossWeight: parseFloat(sumWeight.toFixed(2))}))} style={{ padding:'4px 10px', borderRadius:7, border:'1px solid var(--amber-bdr)', background:'var(--amber-bg)', color:'var(--amber)', fontSize:12, fontWeight:700, cursor:'pointer' }}>{sq?'Përdor':'Use'} {sumWeight.toFixed(2)}</button>
-                      <button onClick={() => {}} style={{ padding:'4px 10px', borderRadius:7, border:'1px solid var(--border)', background:'transparent', color:'var(--t4)', fontSize:12, cursor:'pointer' }}>{sq?'Mbaj manualen':'Keep'}</button>
+                      <button onClick={() => setHeader(h => ({...h, totalGrossWeight: 0}))} style={{ padding:'4px 10px', borderRadius:7, border:'1px solid var(--border)', background:'transparent', color:'var(--t4)', fontSize:12, cursor:'pointer' }}>{sq?'Vendos 0':'Set 0'}</button>
                     </div>
                   </div>
                 )}
-                {pkgDiff && header.totalPackages && (
+                {pkgDiff && header.totalPackages && !(sumWeight === 0 && sumPkgs === 0 && weightDiff) && (
                   <div style={{ background: 'var(--surface)', border: '1.5px solid var(--amber-bdr)', borderRadius: 12, padding: '12px 16px', borderLeft: '3px solid var(--amber)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
                     <span style={{ fontSize:13, color:'var(--t2)' }}>
                       {sq ? 'Paketime' : 'Packages'}: <strong>{header.totalPackages}</strong> → {sq?'nga rreshtat':'from rows'}: <strong style={{color:'var(--amber)'}}>{sumPkgs}</strong> <span style={{color:'var(--amber)'}}>(Δ {Math.abs((header.totalPackages||0)-sumPkgs)})</span>
                     </span>
                     <div style={{ display:'flex', gap:6 }}>
                       <button onClick={() => setHeader(h => ({...h, totalPackages: sumPkgs}))} style={{ padding:'4px 10px', borderRadius:7, border:'1px solid var(--amber-bdr)', background:'var(--amber-bg)', color:'var(--amber)', fontSize:12, fontWeight:700, cursor:'pointer' }}>{sq?'Përdor':'Use'} {sumPkgs}</button>
-                      <button onClick={() => {}} style={{ padding:'4px 10px', borderRadius:7, border:'1px solid var(--border)', background:'transparent', color:'var(--t4)', fontSize:12, cursor:'pointer' }}>{sq?'Mbaj':'Keep'}</button>
+                      <button onClick={() => setHeader(h => ({...h, totalPackages: 0}))} style={{ padding:'4px 10px', borderRadius:7, border:'1px solid var(--border)', background:'transparent', color:'var(--t4)', fontSize:12, cursor:'pointer' }}>{sq?'Vendos 0':'Set 0'}</button>
                     </div>
                   </div>
                 )}
