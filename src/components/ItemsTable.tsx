@@ -390,7 +390,8 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
       )}
 
       <div className="overflow-x-auto rounded-xl border border-gray-200">
-        <table className="w-full text-sm">
+        {/* Simple: auto layout fills width. Pro: fixed layout for many columns. */}
+        <table className="w-full text-sm" style={{ tableLayout: viewMode === 'simple' ? 'auto' : undefined }}>
           {/* Simple view: 7 key columns. Pro: all 15 columns */}
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
@@ -529,15 +530,31 @@ export default function ItemsTable({ lang, items, onChange }: Props) {
           {items.length > 0 && (
             <tfoot className="bg-gray-50 border-t-2 border-gray-300 font-bold">
               <tr>
-                <td colSpan={4} className="px-3 py-2 text-sm text-gray-700">TOTAL</td>
-                <td className="px-3 py-2 text-sm text-right">{items.reduce((s, i) => s + i.qty, 0).toFixed(0)}</td>
-                <td></td>
-                <td></td>
-                <td className="px-3 py-2 text-sm text-right">{items.reduce((s, i) => s + i.totalValue, 0).toFixed(2)}</td>
-                <td className="px-3 py-2 text-sm text-right">{items.reduce((s, i) => s + i.packages, 0)}</td>
-                <td className="px-3 py-2 text-sm text-right">{items.reduce((s, i) => s + i.grossWeight, 0).toFixed(2)}</td>
-                <td className="px-3 py-2 text-sm text-right">{items.reduce((s, i) => s + i.netWeight, 0).toFixed(2)}</td>
-                <td colSpan={5}></td>
+                {viewMode === 'simple' ? (
+                  /* Simple view: only visible columns */
+                  <>
+                    <td className="px-3 py-2 text-sm text-gray-700">TOTAL</td>
+                    <td className="px-3 py-2 text-sm text-gray-500"></td>{/* Artikulli */}
+                    <td className="px-3 py-2 text-sm text-right">{items.reduce((s, i) => s + i.qty, 0).toFixed(0)}</td>
+                    <td className="px-3 py-2 text-sm text-right">{items.reduce((s, i) => s + i.totalValue, 0).toFixed(2)}</td>
+                    <td className="px-3 py-2 text-sm text-right">{items.reduce((s, i) => s + i.grossWeight, 0).toFixed(2)}</td>
+                    <td></td>{/* Kodi tarifor */}
+                    <td></td>{/* Statusi */}
+                  </>
+                ) : (
+                  /* Pro view: all columns */
+                  <>
+                    <td colSpan={4} className="px-3 py-2 text-sm text-gray-700">TOTAL</td>
+                    <td className="px-3 py-2 text-sm text-right">{items.reduce((s, i) => s + i.qty, 0).toFixed(0)}</td>
+                    <td></td>
+                    <td></td>
+                    <td className="px-3 py-2 text-sm text-right">{items.reduce((s, i) => s + i.totalValue, 0).toFixed(2)}</td>
+                    <td className="px-3 py-2 text-sm text-right">{items.reduce((s, i) => s + i.packages, 0)}</td>
+                    <td className="px-3 py-2 text-sm text-right">{items.reduce((s, i) => s + i.grossWeight, 0).toFixed(2)}</td>
+                    <td className="px-3 py-2 text-sm text-right">{items.reduce((s, i) => s + i.netWeight, 0).toFixed(2)}</td>
+                    <td colSpan={5}></td>
+                  </>
+                )}
               </tr>
             </tfoot>
           )}
