@@ -311,9 +311,11 @@ export default function Home() {
   const [activeAction, setActiveAction] = useState<'upload' | 'voice' | 'camera' | null>('upload')
   const [showCamera, setShowCamera]   = useState(false)
   const [loading, setLoading]         = useState(false)
-  const [loadingStep, setLoadingStep] = useState('')   // progress label
+  const [loadingStep, setLoadingStep] = useState('')
   const [extractError, setExtractError] = useState<{ msg: string; tech?: string } | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [showAsycuda, setShowAsycuda] = useState(false)          // collapsed by default
+  const [expandedPos, setExpandedPos] = useState<number | null>(null) // source rows per position
   const [settings, setSettings]       = useState<AppSettings>(DEFAULT_SETTINGS)
   const [tariffRules, setTariffRules] = useState<TariffRule[]>([])
   const [finalStatus, setFinalStatus] = useState<string>('')
@@ -619,59 +621,254 @@ export default function Home() {
               <HeaderForm lang={lang} data={header} onChange={setHeader} />
             </div>
 
-            {/* Invoice rows card */}
+            {/* ── STEP A: Invoice rows (primary, editable) ─────────── */}
             <div className="card" style={{ padding: 28 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: 'var(--t1)' }}>
-                    {t(lang, 'labels.invoiceRows')}
-                  </h3>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--t4)' }}>{items.length} {sq ? 'artikuj' : 'items'}</p>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--blue-50)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--blue)', flexShrink: 0 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                      <line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: 'var(--t1)' }}>
+                        {sq ? 'Rreshtat e faturës' : 'Invoice rows'}
+                      </h3>
+                      <span style={{ padding: '2px 8px', borderRadius: 99, background: 'var(--blue-50)', color: 'var(--blue)', fontSize: 12, fontWeight: 700, border: '1px solid var(--blue-200)' }}>
+                        {items.length}
+                      </span>
+                      <span style={{
+                        padding: '2px 9px', borderRadius: 99, fontSize: 11, fontWeight: 600,
+                        background: 'rgba(5,150,105,.08)', color: 'var(--green)',
+                        border: '1px solid var(--green-bdr)',
+                        display: 'flex', alignItems: 'center', gap: 4,
+                      }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        {sq ? 'E modifikueshme' : 'Editable'}
+                      </span>
+                    </div>
+                    <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--t4)' }}>
+                      {sq
+                        ? 'Kontrollo të dhënat e lexuara nga fatura. Këto janë rreshtat origjinalë të dokumentit.'
+                        : 'Review data extracted from the invoice. These are the original document rows.'}
+                    </p>
+                  </div>
                 </div>
               </div>
               <ItemsTable lang={lang} items={items} onChange={setItems} />
             </div>
 
-            {/* ASYCUDA positions card */}
-            {positions.length > 0 && (
-              <div className="card" style={{ padding: 28 }}>
-                <div style={{ marginBottom: 20 }}>
-                  <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: 'var(--t1)' }}>
-                    {t(lang, 'labels.asycudaPositions')}
-                  </h3>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--t4)' }}>{positions.length} {sq ? 'pozicione' : 'positions'}</p>
-                </div>
-                <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border)' }}>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        {['Poz.', t(lang,'table.tariffCode'), t(lang,'table.descSq'), t(lang,'table.qty'), t(lang,'table.totalValue'), t(lang,'table.grossWeight'), t(lang,'table.packages'), t(lang,'table.customsRate'), t(lang,'table.vatRate'), t(lang,'table.status')].map(h => (
-                          <th key={h}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {positions.map(pos => (
-                        <tr key={pos.positionNo} style={{
-                          background: pos.status === 'missing' ? 'var(--red-bg)' : pos.status === 'review' ? 'var(--amber-bg)' : 'inherit'
-                        }}>
-                          <td><span style={{ fontWeight: 700, color: 'var(--blue)' }}>{pos.positionNo}</span></td>
-                          <td><code style={{ fontSize: 12, background: 'var(--surface-3)', padding: '2px 6px', borderRadius: 5, color: 'var(--t2)' }}>{pos.tariffCode || <span style={{ color: 'var(--red)', display: 'inline-flex', alignItems: 'center', gap: 3 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>}</code></td>
-                          <td style={{ maxWidth: 200, whiteSpace: 'normal' }}>{pos.descriptionSq}</td>
-                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pos.totalQty} {pos.unit}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{pos.totalValue.toFixed(2)}</td>
-                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pos.grossWeight.toFixed(2)}</td>
-                          <td style={{ textAlign: 'right' }}>{pos.packages}</td>
-                          <td style={{ textAlign: 'right' }}>{pos.customsRate}%</td>
-                          <td style={{ textAlign: 'right' }}>{pos.vatRate}%</td>
-                          <td><span className={posBadge(pos.status)}>{t(lang, `status.${pos.status}`)}</span></td>
-                        </tr>
+            {/* ── STEP B: ASYCUDA positions (derived, read-only) ───── */}
+            {positions.length > 0 && (() => {
+              // Stats for the summary card
+              const mergedCount   = items.length - positions.length
+              const totalVal      = positions.reduce((s, p) => s + p.totalValue, 0)
+              const totalWgt      = positions.reduce((s, p) => s + p.grossWeight, 0)
+              const allOk         = positions.every(p => p.status === 'ok' || p.status === 'ready')
+              const hasUncertain  = positions.some(p => p.status === 'review')
+
+              // Map tariff code → source items
+              const sourceMap: Record<string, typeof items> = {}
+              for (const item of items) {
+                const key = item.tariffCode || `NO_CODE_${item.id}`
+                if (!sourceMap[key]) sourceMap[key] = []
+                sourceMap[key].push(item)
+              }
+
+              return (
+                <div>
+                  {/* Summary card — always visible */}
+                  <div style={{
+                    background: 'var(--surface)', border: '1px solid var(--border)',
+                    borderRadius: 16, padding: '18px 22px', marginBottom: 10,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t3)' }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                            </svg>
+                          </div>
+                          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--t1)' }}>
+                            {sq ? 'Pozicionet ASYCUDA' : 'ASYCUDA Positions'}
+                          </span>
+                          <span style={{ padding: '2px 8px', borderRadius: 99, background: 'var(--surface-3)', color: 'var(--t3)', fontSize: 11.5, fontWeight: 600, border: '1px solid var(--border)' }}>
+                            {sq ? 'Vetëm lexim' : 'Read-only'}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 12, color: 'var(--t4)', maxWidth: 480, lineHeight: 1.5 }}>
+                          {sq
+                            ? 'Këto pozicione krijohen automatikisht nga rreshtat e faturës dhe përdoren për XML. Nëse ndrysho rreshtat, këto ricaktohen vetë.'
+                            : 'These positions are automatically calculated from invoice rows and used for the XML. Editing rows above recalculates this instantly.'}
+                        </p>
+                      </div>
+                      {/* Status indicator */}
+                      <div style={{
+                        padding: '8px 14px', borderRadius: 10,
+                        background: allOk ? 'var(--green-bg)' : hasUncertain ? 'var(--amber-bg)' : 'var(--red-bg)',
+                        border: `1px solid ${allOk ? 'var(--green-bdr)' : hasUncertain ? 'var(--amber-bdr)' : 'var(--red-bdr)'}`,
+                        fontSize: 12.5, fontWeight: 700,
+                        color: allOk ? 'var(--green)' : hasUncertain ? 'var(--amber)' : 'var(--red)',
+                        flexShrink: 0, textAlign: 'center',
+                      }}>
+                        {allOk
+                          ? (sq ? 'Gati për XML' : 'Ready for XML')
+                          : hasUncertain
+                            ? (sq ? 'Disa kode tariforë për kontroll' : 'Some tariff codes need review')
+                            : (sq ? 'Kode tariforë mungojnë' : 'Tariff codes missing')}
+                      </div>
+                    </div>
+
+                    {/* 4-number summary */}
+                    <div style={{ display: 'flex', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
+                      {[
+                        { label: sq ? 'Rreshta fature' : 'Invoice rows',     value: items.length,                   color: 'var(--blue)' },
+                        { label: sq ? 'Pozicione ASYCUDA' : 'ASYCUDA pos.',  value: positions.length,               color: 'var(--green)' },
+                        { label: sq ? 'Rreshta të bashkuara' : 'Rows merged', value: mergedCount > 0 ? mergedCount : '—', color: 'var(--amber)' },
+                        { label: sq ? 'Vlera totale' : 'Total value',         value: totalVal.toFixed(2),            color: 'var(--t2)' },
+                        { label: sq ? 'Pesha totale (kg)' : 'Total weight',   value: totalWgt.toFixed(2),            color: 'var(--t2)' },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} style={{ textAlign: 'center', minWidth: 80 }}>
+                          <div style={{ fontSize: 17, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
+                          <div style={{ fontSize: 10.5, color: 'var(--t4)', fontWeight: 600, letterSpacing: '.03em', marginTop: 3, textTransform: 'uppercase' }}>{label}</div>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                    </div>
+
+                    {/* Toggle button */}
+                    <button
+                      onClick={() => setShowAsycuda(v => !v)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 7,
+                        marginTop: 14, padding: '8px 14px', borderRadius: 9,
+                        border: '1px solid var(--border)', background: 'var(--surface-2)',
+                        color: 'var(--t2)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                        transition: 'all .15s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue-200)'; e.currentTarget.style.color = 'var(--blue)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--t2)'; }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                        style={{ transform: showAsycuda ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
+                        <polyline points="6 9 12 15 18 9"/>
+                      </svg>
+                      {showAsycuda
+                        ? (sq ? 'Fshih pozicionet ASYCUDA' : 'Hide ASYCUDA positions')
+                        : (sq ? 'Shfaq pozicionet ASYCUDA' : 'Show ASYCUDA positions')}
+                    </button>
+                  </div>
+
+                  {/* Collapsible ASYCUDA table */}
+                  {showAsycuda && (
+                    <div className="card a-slide-down" style={{ padding: 0, overflow: 'hidden' }}>
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Poz.</th>
+                            <th>{t(lang,'table.tariffCode')}</th>
+                            <th>{t(lang,'table.descSq')}</th>
+                            <th style={{ textAlign: 'right' }}>{t(lang,'table.qty')}</th>
+                            <th style={{ textAlign: 'right' }}>{t(lang,'table.totalValue')}</th>
+                            <th style={{ textAlign: 'right' }}>{t(lang,'table.grossWeight')}</th>
+                            <th style={{ textAlign: 'right' }}>{t(lang,'table.packages')}</th>
+                            <th style={{ textAlign: 'right' }}>{t(lang,'table.customsRate')}</th>
+                            <th style={{ textAlign: 'right' }}>{t(lang,'table.vatRate')}</th>
+                            <th>{t(lang,'table.status')}</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {positions.map(pos => {
+                            const key     = pos.tariffCode || `NO_CODE_${pos.positionNo}`
+                            const sources = sourceMap[key] || []
+                            const merged  = sources.length > 1
+                            const isOpen  = expandedPos === pos.positionNo
+
+                            return (
+                              <>
+                                <tr key={pos.positionNo} style={{
+                                  background: pos.status === 'missing' ? 'var(--red-bg)' : pos.status === 'review' ? 'var(--amber-bg)' : 'inherit',
+                                }}>
+                                  <td><span style={{ fontWeight: 700, color: 'var(--blue)' }}>{pos.positionNo}</span></td>
+                                  <td>
+                                    <code style={{ fontSize: 12, background: 'var(--surface-3)', padding: '2px 6px', borderRadius: 5, color: 'var(--t2)' }}>
+                                      {pos.tariffCode || <span style={{ color: 'var(--red)' }}>—</span>}
+                                    </code>
+                                  </td>
+                                  <td style={{ maxWidth: 200, whiteSpace: 'normal' }}>
+                                    <div>{pos.descriptionSq}</div>
+                                    {merged && (
+                                      <span style={{
+                                        display: 'inline-block', marginTop: 3,
+                                        padding: '1px 7px', borderRadius: 99, fontSize: 10.5, fontWeight: 700,
+                                        background: 'var(--blue-100)', color: 'var(--blue)', border: '1px solid var(--blue-200)',
+                                      }}>
+                                        {sq ? `I bashkuar nga ${sources.length} rreshta` : `Merged from ${sources.length} rows`}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pos.totalQty} {pos.unit}</td>
+                                  <td style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{pos.totalValue.toFixed(2)}</td>
+                                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pos.grossWeight.toFixed(2)}</td>
+                                  <td style={{ textAlign: 'right' }}>{pos.packages}</td>
+                                  <td style={{ textAlign: 'right' }}>{pos.customsRate}%</td>
+                                  <td style={{ textAlign: 'right' }}>{pos.vatRate}%</td>
+                                  <td><span className={posBadge(pos.status)}>{t(lang, `status.${pos.status}`)}</span></td>
+                                  <td>
+                                    <button
+                                      onClick={() => setExpandedPos(isOpen ? null : pos.positionNo)}
+                                      style={{
+                                        padding: '4px 9px', borderRadius: 7, border: '1px solid var(--border)',
+                                        background: isOpen ? 'var(--blue-50)' : 'var(--surface-3)',
+                                        color: isOpen ? 'var(--blue)' : 'var(--t4)',
+                                        fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      {isOpen ? '▲' : '▼'} {sq ? 'Burimet' : 'Sources'}
+                                    </button>
+                                  </td>
+                                </tr>
+                                {/* Source rows expansion */}
+                                {isOpen && sources.length > 0 && (
+                                  <tr key={`src-${pos.positionNo}`}>
+                                    <td colSpan={11} style={{ padding: 0, background: 'var(--blue-50)' }}>
+                                      <div style={{ padding: '10px 16px', borderTop: '1px solid var(--blue-200)' }}>
+                                        <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
+                                          {sq ? `Rreshtat burimorë (${sources.length})` : `Source rows (${sources.length})`}
+                                        </p>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                          {sources.map(src => (
+                                            <div key={src.id} style={{
+                                              display: 'flex', alignItems: 'center', gap: 12, padding: '7px 12px',
+                                              background: '#fff', borderRadius: 8, border: '1px solid var(--blue-200)',
+                                              fontSize: 12.5,
+                                            }}>
+                                              <code style={{ color: 'var(--t4)', fontSize: 11 }}>{src.itemNo}</code>
+                                              <span style={{ flex: 1, color: 'var(--t2)', fontWeight: 500 }}>{src.descriptionEn}</span>
+                                              <span style={{ color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{src.qty} {src.unit}</span>
+                                              <span style={{ color: 'var(--t1)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{src.totalValue.toFixed(2)}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* Next button */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 4 }}>
