@@ -202,26 +202,39 @@ function ActionCard({ icon, title, desc, active, onClick }: {
 }
 
 /* ─── Stat Card ──────────────────────────────────────────────── */
-function StatCard({ value, label, color = 'blue' }: { value: string | number; label: string; color?: string }) {
-  const colors: Record<string, [string, string]> = {
-    blue:  ['var(--blue-50)',  'var(--blue)'],
-    green: ['var(--green-bg)', 'var(--green)'],
-    amber: ['var(--amber-bg)', 'var(--amber)'],
-    red:   ['var(--red-bg)',   'var(--red)'],
-    gray:  ['var(--surface-3)','var(--t3)'],
+function StatCard({ value, label, subtitle, color = 'blue' }: {
+  value: string | number
+  label: string
+  subtitle?: string
+  color?: string
+}) {
+  const colors: Record<string, [string, string, string]> = {
+    blue:  ['var(--blue-50)',  'var(--blue)',  'var(--blue-200)'],
+    green: ['var(--green-bg)', 'var(--green)', 'var(--green-bdr)'],
+    amber: ['var(--amber-bg)', 'var(--amber)', 'var(--amber-bdr)'],
+    red:   ['var(--red-bg)',   'var(--red)',   'var(--red-bdr)'],
+    gray:  ['var(--surface-3)','var(--t3)',    'var(--border)'],
   }
-  const [bg, fg] = colors[color] || colors.gray
+  const [bg, fg, bdr] = colors[color] || colors.gray
   return (
     <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 16, padding: '18px 20px',
-      boxShadow: 'var(--sh-xs)', flex: '1 1 0', minWidth: 0,
+      background: 'var(--surface)',
+      border: `1px solid ${color === 'gray' ? 'var(--border)' : bdr}`,
+      borderRadius: 16, padding: '16px 18px',
+      boxShadow: 'var(--sh-xs)', flex: '1 1 0', minWidth: 140,
+      borderTop: `3px solid ${fg}`,
     }}>
-      <div style={{ fontSize: 26, fontWeight: 800, color: fg, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 28, fontWeight: 900, color: fg, lineHeight: 1 }}>{value}</div>
       <div style={{
-        marginTop: 4, fontSize: 11.5, fontWeight: 600,
-        color: 'var(--t4)', letterSpacing: '.04em', textTransform: 'uppercase',
+        marginTop: 5, fontSize: 11, fontWeight: 700,
+        color: 'var(--t2)', letterSpacing: '.05em', textTransform: 'uppercase',
+        lineHeight: 1.3,
       }}>{label}</div>
+      {subtitle && (
+        <div style={{ marginTop: 4, fontSize: 11, color: 'var(--t4)', lineHeight: 1.4 }}>
+          {subtitle}
+        </div>
+      )}
     </div>
   )
 }
@@ -392,8 +405,12 @@ export default function Home() {
     setStep('review')
   }
 
+  // 'missing' = field is completely empty — must be filled before export
+  // 'review'  = field has a value (auto-suggested) — needs human confirmation
+  // A field cannot be both: review items have a tariffCode, missing items don't
   const missingCount = missingFields.filter(m => m.status === 'missing').length
-  const reviewCount  = items.filter(i => i.status === 'review').length
+  const reviewCount  = items.filter(i => i.status === 'review').length   // has code, needs confirm
+  const okCount      = items.filter(i => i.status === 'ok').length
   const sq = lang === 'sq'
 
   /* ── trust chips data ── */
@@ -553,11 +570,58 @@ export default function Home() {
 
             {/* Stats row */}
             {items.length > 0 && (
-              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }} className="a-fade-in">
-                <StatCard value={items.length}    label={sq ? 'Artikuj të lexuar' : 'Items extracted'} color="blue" />
-                <StatCard value={positions.length} label={sq ? 'Pozicione ASYCUDA' : 'ASYCUDA positions'} color="green" />
-                <StatCard value={missingCount}    label={sq ? 'Fusha mungojnë' : 'Missing fields'} color={missingCount > 0 ? 'red' : 'green'} />
-                <StatCard value={reviewCount}     label={sq ? 'Për kontroll' : 'Needs review'} color={reviewCount > 0 ? 'amber' : 'green'} />
+              <div className="a-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <StatCard
+                    value={items.length}
+                    label={sq ? 'Artikuj të lexuar' : 'Items read'}
+                    subtitle={sq ? 'Nga dokumenti' : 'From document'}
+                    color="blue"
+                  />
+                  <StatCard
+                    value={positions.length}
+                    label={sq ? 'Pozicione ASYCUDA' : 'ASYCUDA positions'}
+                    subtitle={sq ? 'Grupe sipas kodit tarifor' : 'Grouped by tariff code'}
+                    color="green"
+                  />
+                  <StatCard
+                    value={missingCount}
+                    label={sq ? 'Të dhëna mungojnë' : 'Data missing'}
+                    subtitle={sq ? 'Duhet të plotësohen para eksportit' : 'Must be filled before export'}
+                    color={missingCount > 0 ? 'red' : 'green'}
+                  />
+                  <StatCard
+                    value={reviewCount}
+                    label={sq ? 'Të dhëna për kontroll' : 'Data to review'}
+                    subtitle={sq ? 'Janë gjetur, por duhet verifikuar' : 'Found, but should be verified'}
+                    color={reviewCount > 0 ? 'amber' : 'green'}
+                  />
+                </div>
+
+                {/* Legend — always shown when there's something to explain */}
+                {(missingCount > 0 || reviewCount > 0) && (
+                  <div style={{
+                    display: 'flex', gap: 20, flexWrap: 'wrap',
+                    padding: '10px 14px', borderRadius: 10,
+                    background: 'var(--surface-2)', border: '1px solid var(--border)',
+                    fontSize: 12, color: 'var(--t3)', lineHeight: 1.5,
+                  }}>
+                    {missingCount > 0 && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--red)', flexShrink: 0 }} />
+                        <strong style={{ color: 'var(--t2)' }}>{sq ? '"Mungon"' : '"Missing"'}</strong>
+                        {sq ? ' = fusha është bosh dhe obligative.' : ' = field is empty and required.'}
+                      </span>
+                    )}
+                    {reviewCount > 0 && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }} />
+                        <strong style={{ color: 'var(--t2)' }}>{sq ? '"Për kontroll"' : '"Review"'}</strong>
+                        {sq ? ' = vlera është propozuar automatikisht, por duhet verifikuar.' : ' = value was auto-suggested, please verify.'}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

@@ -133,7 +133,9 @@ function buildItems(parsed: { header?: Partial<HeaderData>; items?: Partial<Invo
       tariffCode:    tariffRule?.tariffCode   || '',
       customsRate:   tariffRule?.customsRate  ?? 10,
       vatRate:       tariffRule?.vatRate      ?? 18,
-      status:        tariffRule ? 'ok' : 'review',
+      // review = code was auto-suggested, needs human confirmation
+      // missing = no code found at all, must be added
+      status:        tariffRule ? 'review' : 'missing',
     }
   })
 }
